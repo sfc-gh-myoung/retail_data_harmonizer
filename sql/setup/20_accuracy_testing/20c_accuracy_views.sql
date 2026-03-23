@@ -1,0 +1,93 @@
+-- ============================================================================
+-- Retail Data Harmonization Demo
+-- Script: sql/setup/20_accuracy_testing/20c_accuracy_views.sql
+-- Purpose: Summary views for accuracy test results
+-- Depends on: 20b_accuracy_procedures.sql
+-- ============================================================================
+
+USE ROLE HARMONIZER_DEMO_ROLE;
+USE DATABASE HARMONIZER_DEMO;
+USE WAREHOUSE HARMONIZER_DEMO_WH;
+
+-- ============================================================================
+-- Accuracy Summary Views
+-- ============================================================================
+
+-- Overall accuracy summary by method
+CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_SUMMARY
+COMMENT = 'Overall accuracy summary by matching method for the latest test run'
+AS
+SELECT 
+    r.METHOD,
+    COUNT(*) AS TOTAL_TESTS,
+    SUM(CASE WHEN r.IS_CORRECT THEN 1 ELSE 0 END) AS TOP1_CORRECT,
+    ROUND(SUM(CASE WHEN r.IS_CORRECT THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP1_ACCURACY_PCT,
+    SUM(CASE WHEN r.TOP3_CONTAINS THEN 1 ELSE 0 END) AS TOP3_CORRECT,
+    ROUND(SUM(CASE WHEN r.TOP3_CONTAINS THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP3_ACCURACY_PCT,
+    SUM(CASE WHEN r.TOP5_CONTAINS THEN 1 ELSE 0 END) AS TOP5_CORRECT,
+    ROUND(SUM(CASE WHEN r.TOP5_CONTAINS THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP5_ACCURACY_PCT
+FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RESULTS r
+WHERE r.RUN_ID = (
+    SELECT RUN_ID FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RUNS 
+    ORDER BY RUN_TIMESTAMP DESC LIMIT 1
+)
+GROUP BY r.METHOD
+ORDER BY TOP1_ACCURACY_PCT DESC;
+
+-- Accuracy by difficulty level
+CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_BY_DIFFICULTY
+COMMENT = 'Accuracy breakdown by difficulty level (EASY/MEDIUM/HARD) per method'
+AS
+SELECT 
+    r.METHOD,
+    t.DIFFICULTY,
+    COUNT(*) AS TESTS,
+    ROUND(SUM(CASE WHEN r.IS_CORRECT THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP1_PCT,
+    ROUND(SUM(CASE WHEN r.TOP3_CONTAINS THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP3_PCT,
+    ROUND(SUM(CASE WHEN r.TOP5_CONTAINS THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100, 1) AS TOP5_PCT
+FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RESULTS r
+JOIN HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_SET t ON r.TEST_ID = t.TEST_ID
+WHERE r.RUN_ID = (
+    SELECT RUN_ID FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RUNS 
+    ORDER BY RUN_TIMESTAMP DESC LIMIT 1
+)
+GROUP BY r.METHOD, t.DIFFICULTY
+ORDER BY r.METHOD, 
+    CASE t.DIFFICULTY WHEN 'EASY' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'HARD' THEN 3 END;
+
+-- Detailed failure analysis
+CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_FAILURES
+COMMENT = 'Detailed analysis of incorrect matches for debugging and improvement'
+AS
+SELECT 
+    r.METHOD,
+    t.DIFFICULTY,
+    t.RAW_DESCRIPTION,
+    t.EXPECTED_MATCH,
+    r.TOP1_DESCRIPTION AS ACTUAL_MATCH,
+    ROUND(r.TOP1_SCORE, 3) AS SCORE,
+    t.NOTES
+FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RESULTS r
+JOIN HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_SET t ON r.TEST_ID = t.TEST_ID
+WHERE r.RUN_ID = (
+    SELECT RUN_ID FROM HARMONIZER_DEMO.ANALYTICS.ACCURACY_TEST_RUNS 
+    ORDER BY RUN_TIMESTAMP DESC LIMIT 1
+)
+  AND r.IS_CORRECT = FALSE
+ORDER BY r.METHOD, t.DIFFICULTY;
+
+-- NOTE: V_DEMO_VALIDATION view removed - unused in backend/frontend/tasks
+
+-- ============================================================================
+-- Quick Test Commands
+-- ============================================================================
+-- 
+-- To run accuracy tests (4-method ensemble):
+--   CALL HARMONIZER_DEMO.ANALYTICS.RUN_ACCURACY_TESTS(TRUE);   -- Cortex Search + Cosine + Edit + Jaccard (recommended)
+--   CALL HARMONIZER_DEMO.ANALYTICS.RUN_ACCURACY_TESTS(FALSE);  -- Cosine + Edit + Jaccard only (fastest)
+--
+-- To view results:
+--   SELECT * FROM HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_SUMMARY;
+--   SELECT * FROM HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_BY_DIFFICULTY;
+--   SELECT * FROM HARMONIZER_DEMO.ANALYTICS.V_ACCURACY_FAILURES;
+--

@@ -1,0 +1,197 @@
+-- ============================================================================
+-- Retail Data Harmonization Demo
+-- Script: sql/setup/05_seed_data/05j_raw_items_arena.sql
+-- Purpose: Generate 1000+ POS_ARENA records using realistic naming patterns
+-- ============================================================================
+--
+-- POS_ARENA Characteristics:
+-- - ALL-CAPS abbreviated descriptions (typical arena POS style)
+-- - Common arena abbreviations for concession items
+-- - Medium-high transaction volumes (arena events 15K-21K attendance)
+-- ============================================================================
+
+USE ROLE HARMONIZER_DEMO_ROLE;
+USE DATABASE HARMONIZER_DEMO;
+USE WAREHOUSE HARMONIZER_DEMO_WH;
+
+INSERT INTO HARMONIZER_DEMO.RAW.RAW_RETAIL_ITEMS 
+    (ITEM_ID, RAW_DESCRIPTION, SOURCE_SYSTEM, SOURCE_ITEM_CODE, EVENT_ID, TRANSACTION_COUNT, TRANSACTION_DATE, REGISTER_ID, MATCH_STATUS)
+SELECT 
+    UUID_STRING(),
+    CASE MOD(SEQ4(), 150)
+        -- Hot Dogs (0-9)
+        WHEN 0 THEN 'REG HOTDOG'
+        WHEN 1 THEN 'HOT DOG'
+        WHEN 2 THEN 'JUMBO HOTDOG'
+        WHEN 3 THEN 'JUMBO DOG'
+        WHEN 4 THEN 'ALL BEEF HOTDOG'
+        WHEN 5 THEN 'FOOTLONG HOTDOG'
+        WHEN 6 THEN 'POLISH SAUSAGE'
+        WHEN 7 THEN 'BRAT'
+        WHEN 8 THEN 'CHILI DOG'
+        WHEN 9 THEN 'CORN DOG'
+        -- Coca-Cola Products (10-19)
+        WHEN 10 THEN 'COCA COLA 20OZ'
+        WHEN 11 THEN 'COKE 20OZ'
+        WHEN 12 THEN 'DIET COKE 20OZ'
+        WHEN 13 THEN 'DT COKE 20OZ'
+        WHEN 14 THEN 'COKE ZERO 20OZ'
+        WHEN 15 THEN 'CHERRY COKE 20OZ'
+        WHEN 16 THEN 'COKE 32OZ'
+        WHEN 17 THEN 'LRG COKE'
+        WHEN 18 THEN 'COKE CLASSIC'
+        WHEN 19 THEN 'VANILLA COKE'
+        -- Other Sodas (20-29)
+        WHEN 20 THEN 'SPRITE 20OZ'
+        WHEN 21 THEN 'PEPSI 20OZ'
+        WHEN 22 THEN 'DIET PEPSI 20OZ'
+        WHEN 23 THEN 'MTN DEW 20OZ'
+        WHEN 24 THEN 'MOUNTAIN DEW'
+        WHEN 25 THEN 'DR PEPPER 20OZ'
+        WHEN 26 THEN 'ROOT BEER 20OZ'
+        WHEN 27 THEN 'FANTA ORANGE'
+        WHEN 28 THEN '7UP 20OZ'
+        WHEN 29 THEN 'GINGER ALE'
+        -- Domestic Beer (30-39)
+        WHEN 30 THEN 'BUD LIGHT 16OZ'
+        WHEN 31 THEN 'BUD LT 16OZ'
+        WHEN 32 THEN 'BUDWEISER 16OZ'
+        WHEN 33 THEN 'BUD LIGHT 24OZ'
+        WHEN 34 THEN 'MICHELOB ULTRA 16OZ'
+        WHEN 35 THEN 'MICH ULTRA'
+        WHEN 36 THEN 'MILLER LITE 16OZ'
+        WHEN 37 THEN 'COORS LIGHT 16OZ'
+        WHEN 38 THEN 'COORS LT'
+        WHEN 39 THEN 'NATTY LIGHT'
+        -- Import/Craft Beer (40-49)
+        WHEN 40 THEN 'CORONA 12OZ'
+        WHEN 41 THEN 'CORONA EXTRA'
+        WHEN 42 THEN 'MODELO ESPECIAL 12OZ'
+        WHEN 43 THEN 'HEINEKEN 12OZ'
+        WHEN 44 THEN 'STELLA ARTOIS'
+        WHEN 45 THEN 'BLUE MOON 16OZ'
+        WHEN 46 THEN 'SAM ADAMS'
+        WHEN 47 THEN 'DOS EQUIS'
+        WHEN 48 THEN 'PACIFICO'
+        WHEN 49 THEN 'GUINNESS'
+        -- Hard Seltzer (50-54)
+        WHEN 50 THEN 'WHITE CLAW 12OZ'
+        WHEN 51 THEN 'WHITE CLAW MANGO'
+        WHEN 52 THEN 'TRULY SELTZER'
+        WHEN 53 THEN 'HIGH NOON'
+        WHEN 54 THEN 'VIZZY SELTZER'
+        -- Chips/Potato Chips (55-69)
+        WHEN 55 THEN 'LAYS CLASSIC'
+        WHEN 56 THEN 'LAYS CHIPS'
+        WHEN 57 THEN 'LAYS POTATO CHIPS'
+        WHEN 58 THEN 'LAYS BBQ'
+        WHEN 59 THEN 'LAYS SC ONION'
+        WHEN 60 THEN 'DORITOS NACHO'
+        WHEN 61 THEN 'DORITOS NACHO CHS'
+        WHEN 62 THEN 'DORITOS COOL RANCH'
+        WHEN 63 THEN 'CHEETOS CRUNCHY'
+        WHEN 64 THEN 'CHEETOS FLAMIN HOT'
+        WHEN 65 THEN 'FRITOS ORIG'
+        WHEN 66 THEN 'FRITOS CORN CHIP'
+        WHEN 67 THEN 'RUFFLES CHED'
+        WHEN 68 THEN 'TOSTITOS'
+        WHEN 69 THEN 'PRINGLES'
+        -- Nachos and Fries (70-79)
+        WHEN 70 THEN 'NACHOS CHEESE'
+        WHEN 71 THEN 'NACHOS W CHS'
+        WHEN 72 THEN 'LOADED NACHOS'
+        WHEN 73 THEN 'LG FRIES'
+        WHEN 74 THEN 'LRG FRIES'
+        WHEN 75 THEN 'MED FRIES'
+        WHEN 76 THEN 'CURLY FRIES'
+        WHEN 77 THEN 'ONION RINGS'
+        WHEN 78 THEN 'TOTS'
+        WHEN 79 THEN 'LOADED FRIES'
+        -- Pretzels and Popcorn (80-86)
+        WHEN 80 THEN 'SOFT PRETZEL'
+        WHEN 81 THEN 'PRETZEL W CHS'
+        WHEN 82 THEN 'PRETZEL BITES'
+        WHEN 83 THEN 'POPCORN LG'
+        WHEN 84 THEN 'LRG POPCORN'
+        WHEN 85 THEN 'POPCORN SM'
+        WHEN 86 THEN 'KETTLE CORN'
+        -- Pizza (87-93)
+        WHEN 87 THEN 'PEPPERONI PIZZA SLC'
+        WHEN 88 THEN 'PEP SLICE'
+        WHEN 89 THEN 'CHEESE PIZZA SLC'
+        WHEN 90 THEN 'CHS SLICE'
+        WHEN 91 THEN 'SUPREME SLICE'
+        WHEN 92 THEN 'BBQ CKN PIZZA'
+        WHEN 93 THEN 'MEAT LOVERS SLC'
+        -- Burgers (94-100)
+        WHEN 94 THEN 'CHEESEBURGER'
+        WHEN 95 THEN 'BCN CHEESEBURGER'
+        WHEN 96 THEN 'DBL CHEESEBURGER'
+        WHEN 97 THEN 'HAMBURGER'
+        WHEN 98 THEN 'VEGGIE BURGER'
+        WHEN 99 THEN 'BBQ BURGER'
+        WHEN 100 THEN 'MUSH SWISS BRGR'
+        -- Chicken (101-107)
+        WHEN 101 THEN 'CHKN TENDERS 4PC'
+        WHEN 102 THEN 'CHKN TNDR 6PC'
+        WHEN 103 THEN 'CHKN SANDWICH'
+        WHEN 104 THEN 'CHKN WINGS 6PC'
+        WHEN 105 THEN 'BUFF WINGS'
+        WHEN 106 THEN 'CHKN NUGGETS 6PC'
+        WHEN 107 THEN 'SPICY CHKN SAND'
+        -- Water (108-112)
+        WHEN 108 THEN 'DASANI 20OZ'
+        WHEN 109 THEN 'AQUAFINA 20OZ'
+        WHEN 110 THEN 'SMARTWATER'
+        WHEN 111 THEN 'EVIAN'
+        WHEN 112 THEN 'BTL WATER'
+        -- Energy/Sports Drinks (113-120)
+        WHEN 113 THEN 'RED BULL 12OZ'
+        WHEN 114 THEN 'MONSTER 16OZ'
+        WHEN 115 THEN 'MONSTER ENERGY'
+        WHEN 116 THEN 'GATORADE ORG'
+        WHEN 117 THEN 'GATORADE FRT PNCH'
+        WHEN 118 THEN 'GATORADE LMN LM'
+        WHEN 119 THEN 'POWERADE BLU'
+        WHEN 120 THEN 'CELSIUS'
+        -- Candy Bars (121-132)
+        WHEN 121 THEN 'SNICKERS'
+        WHEN 122 THEN 'SNKRS BAR'
+        WHEN 123 THEN 'M&M PEANUT'
+        WHEN 124 THEN 'M&M PLAIN'
+        WHEN 125 THEN 'REESES CUPS'
+        WHEN 126 THEN 'KIT KAT'
+        WHEN 127 THEN 'TWIX'
+        WHEN 128 THEN 'MILKY WAY'
+        WHEN 129 THEN 'BUTTERFINGER'
+        WHEN 130 THEN 'SKITTLES'
+        WHEN 131 THEN 'STARBURST'
+        WHEN 132 THEN 'SOUR PATCH'
+        -- Ice Cream (133-139)
+        WHEN 133 THEN 'ICE CREAM SUNDAE'
+        WHEN 134 THEN 'ICE CREAM CONE'
+        WHEN 135 THEN 'SOFT SERVE VAN'
+        WHEN 136 THEN 'SOFT SERVE CHOC'
+        WHEN 137 THEN 'ICE CRM SANDWICH'
+        WHEN 138 THEN 'FROZEN LEMONADE'
+        WHEN 139 THEN 'DIPPIN DOTS'
+        -- Arena Classics (140-149)
+        WHEN 140 THEN 'PEANUTS'
+        WHEN 141 THEN 'CRACKER JACK'
+        WHEN 142 THEN 'COTTON CANDY'
+        WHEN 143 THEN 'FUNNEL CAKE'
+        WHEN 144 THEN 'CHURRO'
+        WHEN 145 THEN 'COOKIE'
+        WHEN 146 THEN 'BROWNIE'
+        WHEN 147 THEN 'LEMONADE LG'
+        WHEN 148 THEN 'ICED TEA 20OZ'
+        ELSE 'COFFEE LG'
+    END AS RAW_DESC,
+    'POS_ARENA',
+    'ARN-' || LPAD(MOD(SEQ4(), 100)::VARCHAR, 3, '0'),
+    'EVT-ARN-' || LPAD((MOD(SEQ4(), 25) + 1)::VARCHAR, 3, '0'),
+    UNIFORM(100, 2000, RANDOM()),
+    DATEADD(day, MOD(SEQ4(), 200), '2025-08-01')::DATE,
+    'POS-' || CASE MOD(SEQ4(), 4) WHEN 0 THEN 'A' WHEN 1 THEN 'B' WHEN 2 THEN 'C' ELSE 'D' END || (MOD(SEQ4(), 5) + 1)::VARCHAR,
+    'PENDING'
+FROM TABLE(GENERATOR(ROWCOUNT => 1500));
