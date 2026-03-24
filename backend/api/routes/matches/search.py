@@ -108,8 +108,12 @@ async def search_matches(body: MatchSearchRequest):
     nulls = "NULLS LAST" if sort_dir == "desc" else "NULLS FIRST"
 
     try:
-        agreement_count_filter = f" AND AGREEMENT_LEVEL = {int(agreement_filter)}" if agreement_filter and agreement_filter not in ('all', 'All') else ""
-        
+        agreement_count_filter = (
+            f" AND AGREEMENT_LEVEL = {int(agreement_filter)}"
+            if agreement_filter and agreement_filter not in ("all", "All")
+            else ""
+        )
+
         # Get total count
         if group_by == "unique_description":
             count_result = await sf.query(f"""
@@ -254,12 +258,16 @@ async def search_matches(body: MatchSearchRequest):
                 )
                 SELECT *
                 FROM ranked_items
-                WHERE rn = 1{f' AND AGREEMENT_LEVEL = {int(agreement_filter)}' if agreement_filter and agreement_filter not in ('all', 'All') else ''}
+                WHERE rn = 1{f" AND AGREEMENT_LEVEL = {int(agreement_filter)}" if agreement_filter and agreement_filter not in ("all", "All") else ""}
                 ORDER BY {order_col} {order_dir} {nulls}
                 LIMIT {page_size} OFFSET {offset}
             """)
         else:
-            agreement_filter_sql = f" WHERE AGREEMENT_LEVEL = {int(agreement_filter)}" if agreement_filter and agreement_filter not in ('all', 'All') else ""
+            agreement_filter_sql = (
+                f" WHERE AGREEMENT_LEVEL = {int(agreement_filter)}"
+                if agreement_filter and agreement_filter not in ("all", "All")
+                else ""
+            )
             matches = await sf.query(f"""
                 WITH base_data AS (
                     SELECT

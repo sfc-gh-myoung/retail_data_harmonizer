@@ -72,7 +72,7 @@ Four Snowflake Cortex AI matching methods run in parallel and combine into a ens
 | **Cortex Search** | Cortex Search Service | `@scores.cosine_similarity` normalized from [-1,1] to [0,1] |
 | **Cosine Similarity** | `EMBED_TEXT_1024` + `VECTOR_COSINE_SIMILARITY` | Direct similarity score, typically [0,1] for text |
 | **Edit Distance** | `EDITDISTANCE` | `1 - (distance / max_length)`, range [0,1] |
-| **Jaccard Similarity** | Token intersection/union | `|A ∩ B| / |A ∪ B|` on word tokens, range [0,1] |
+| **Jaccard Similarity** | Token intersection/union | `\|A ∩ B\| / \|A ∪ B\|` on word tokens, range [0,1] |
 
 The ensemble score uses a **normalized 4-signal weighted average with agreement multipliers**:
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Escape pipe characters in README Jaccard Similarity table row to fix broken Score Source rendering on GitHub
+- Reformat agreement filter conditionals in search endpoint for consistent quote style and readability
+
 ## [1.0.0] - 2026-03-23
 
 ### Added
