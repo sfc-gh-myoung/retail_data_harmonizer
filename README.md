@@ -284,6 +284,8 @@ The ensemble pipeline is split into 3 single-responsibility tasks:
 
 ### Ensemble Scoring
 
+![Accuracy](images/retail-data-harmonizer-accuracy.png)
+
 Each method produces a score. The ensemble combines them with configurable weights and applies agreement bonuses:
 
 - All 4 vector signals agree (4-way): 20% boost (capped at 1.0)
@@ -297,6 +299,8 @@ Results are routed based on configurable thresholds stored in `CONFIG`.
 ## Web Interfaces
 
 ### React Web Application
+
+![React Web UI](images/retail-data-harmonizer-dashboard.png)
 
 Web UI for the retail data harmonizer:
 
