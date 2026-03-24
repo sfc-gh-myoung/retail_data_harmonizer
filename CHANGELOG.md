@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- fix(cli): mock `subprocess.run` in validate command tests to prevent `FileNotFoundError` in CI environments without Snowflake CLI
 - Escape pipe characters in README Jaccard Similarity table row to fix broken Score Source rendering on GitHub
 - Reformat agreement filter conditionals in search endpoint for consistent quote style and readability
 - Correct ensemble scoring documentation: remove phantom subcategory penalty from formula, fix routing from inaccurate 3-tier to actual single-threshold logic, add majority vote and rejection path details

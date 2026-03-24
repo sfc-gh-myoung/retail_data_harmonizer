@@ -258,19 +258,23 @@ class TestValidateCommand:
     """Test validate command."""
 
     @patch("cli.test_connection", return_value=True)
+    @patch("subprocess.run")
     @patch("shutil.which")
-    def test_validate_all_pass(self, mock_which, mock_test_conn) -> None:
+    def test_validate_all_pass(self, mock_which, mock_run, mock_test_conn) -> None:
         """Validate passes when all checks pass."""
         mock_which.side_effect = lambda cmd: f"/usr/local/bin/{cmd}"
+        mock_run.return_value = type("Result", (), {"stdout": "Snowflake CLI 3.0.0", "returncode": 0})()
         result = runner.invoke(app, ["validate"])
         assert result.exit_code == 0
         assert "All required checks passed" in result.output
 
     @patch("cli.test_connection", return_value=False)
+    @patch("subprocess.run")
     @patch("shutil.which")
-    def test_validate_connection_failure(self, mock_which, mock_test_conn) -> None:
+    def test_validate_connection_failure(self, mock_which, mock_run, mock_test_conn) -> None:
         """Validate fails when Snowflake connection fails."""
         mock_which.side_effect = lambda cmd: f"/usr/local/bin/{cmd}"
+        mock_run.return_value = type("Result", (), {"stdout": "Snowflake CLI 3.0.0", "returncode": 0})()
         result = runner.invoke(app, ["validate"])
         assert result.exit_code == 1
 
