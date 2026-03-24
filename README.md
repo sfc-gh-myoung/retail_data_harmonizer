@@ -77,26 +77,29 @@ Four Snowflake Cortex AI matching methods run in parallel and combine into a ens
 The ensemble score uses a **normalized 4-signal weighted average with agreement multipliers**:
 
 ```
--- Weights are normalized to sum to 1.0 at runtime
-base_score = (0.55 × cortex_search) + (0.25 × cosine) + (0.12 × edit_distance) + (0.18 × jaccard)
-ensemble_score = LEAST(1.0, base_score × agreement_multiplier - subcategory_penalty)
+base_score = (w_search × cortex_search + w_cosine × cosine + w_edit × edit_distance + w_jaccard × jaccard)
+             / (w_search + w_cosine + w_edit + w_jaccard)
+
+ensemble_score = LEAST(1.0, base_score × agreement_multiplier)
 ```
 
+There isn't a pre-determined, universal weight for any of the scoring methods. The expectation is you will adjust the weights based on testing in your environment on your data. These weights are stored in the `ANALYTICS.CONFIG` table and can be adjusted via SQL or the React UI Settings page.
+
 Where:
-- **Weight Normalization**: Weights are dynamically normalized so base_score can reach 1.0
-- **Agreement Multipliers**: 4-way = 1.20×, 3-way = 1.15×, 2-way = 1.10×
-- **Subcategory Penalty** = -0.15 for mismatch, -0.05 for unknown (when subcategory classification is available)
+- **Weight Normalization**: Raw weights (default 0.55, 0.25, 0.12, 0.18) are divided by their sum at runtime so `base_score` ranges [0, 1]
+- **Agreement Multipliers**: When multiple matchers select the same standard item, the score is boosted — 4-way = 1.20×, 3-way = 1.15×, 2-way = 1.10×, no agreement = 1.00×
+- **Majority Vote**: The `SUGGESTED_STANDARD_ID` is chosen by agreement count (4-way > 3-way > 2-way); ties are broken by highest individual score
 
-**Two-Phase Classification:** Items are classified first by Category (using `AI_CLASSIFY`), then by Subcategory within that category. This enables subcategory-filtered matching and penalties for cross-subcategory matches.
+**Two-Phase Classification:** Items are classified first by Category (using `AI_CLASSIFY`), then by Subcategory within that category. Subcategory-filtered matching narrows the candidate pool for each matcher.
 
-**Routing:**
-- Score >= 80%: Auto-accepted
-- Score 70-79%: Auto-accepted (reviewable)
-- Score < 70%: Routed for human review
+**Routing** (single-threshold, configurable via `AUTO_ACCEPT_THRESHOLD`):
+- Score >= threshold (default 0.80): Auto-accepted into `HARMONIZED_ITEMS`
+- Score < threshold: Routed to `REVIEW_QUEUE` for human review (scores below 0.40 flagged as `VERY_LOW_CONFIDENCE`)
+- All 4 matchers return no candidate: Routed to `REJECTED_ITEMS`
 
 Two cost optimizations run before any AI matching:
 
-1. **De-duplication** — Collapse raw items to unique normalized descriptions (96x reduction on demo data)
+1. **De-duplication** — Collapse raw items to unique normalized descriptions (96× reduction on demo data)
 2. **Fast-path cache** — Skip AI entirely for descriptions previously confirmed by a human reviewer
 
 
