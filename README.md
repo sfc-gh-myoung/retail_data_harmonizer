@@ -63,6 +63,8 @@ This is why an ensemble approach works: different methods cover each other's wea
 
 ## How It Works
 
+![Retail Data Harmonizer Architecture](images/retail-data-harmonizer-architecture.png)
+
 Four Snowflake Cortex AI matching methods run in parallel and combine into a ensemble score:
 
 | Method | Function | Score Source |

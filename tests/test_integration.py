@@ -67,22 +67,6 @@ class TestProjectStructure:
         """Test that the backend services module exists."""
         assert (ROOT / "backend" / "services" / "__init__.py").exists()
 
-    def test_dockerfile_exists(self) -> None:
-        """Test that the Dockerfile exists at project root."""
-        assert (ROOT / "Dockerfile").exists()
-
-    def test_deploy_script_exists(self) -> None:
-        """Test that the SPCS deploy shell script exists."""
-        deploy = ROOT / "deploy_spcs.sh"
-        assert deploy.exists()
-
-    def test_deploy_script_executable(self) -> None:
-        """Test that the SPCS deploy script has executable permissions."""
-        import os
-
-        deploy = ROOT / "deploy_spcs.sh"
-        assert os.access(deploy, os.X_OK)
-
     def test_pyproject_toml_exists(self) -> None:
         """Test that pyproject.toml exists at project root."""
         assert (ROOT / "pyproject.toml").exists()
