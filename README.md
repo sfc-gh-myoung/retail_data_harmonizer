@@ -214,15 +214,6 @@ HARMONIZER_DEMO Database
     ├── V_COST_COMPARISON       Weekly cost trends view
     └── V_PIPELINE_HEALTH       Operational status view
 
-FEATURE_STORE Schema (ML)
-├── ML_TRAINING_DATA           Labeled training examples
-├── FV_SIMILARITY_SCORES       Similarity feature view (materialized)
-├── FV_SIGNAL_AGREEMENT        Agreement feature view (materialized)
-├── FV_MATCH_CONTEXT           Context feature view (materialized)
-├── MODEL_METADATA             Model registry metadata
-├── MODEL_PREDICTIONS          Prediction log for monitoring
-├── MODEL_BASELINE_DATA        Baseline data for drift detection
-└── MODEL_SCORING_DATA         Production predictions for MODEL MONITOR
 ```
 
 ### Unified Job Tracking Framework
@@ -322,7 +313,7 @@ Web UI for the retail data harmonizer:
 
 **Algorithm Comparison** — Side-by-side method agreement analysis, per-source-system performance breakdown, live `AI_SIMILARITY` calculator for ad-hoc text comparison.
 
-**Logs** — Pipeline execution logs with RUN_ID to correlate related steps, STARTED_AT/COMPLETED_AT timestamps for precise timing, drift detection alerts, method performance metrics, error tracking with query IDs, and audit trail. Sortable and filterable by step, status, and category.
+**Logs** — Pipeline execution logs with RUN_ID to correlate related steps, STARTED_AT/COMPLETED_AT timestamps for precise timing, method performance metrics, error tracking with query IDs, and audit trail. Sortable and filterable by step, status, and category.
 
 **Settings** — Adjust ensemble weights, acceptance/review thresholds, batch size, automation schedule, taxonomy viewer, cost configuration.
 
@@ -733,38 +724,6 @@ This data drove the weight adjustment: Cortex Search (0.50) receives the highest
 
 
 
-## Machine Learning (MLOps)
-
-The project includes a complete MLOps workflow for training a **Match Confidence Classifier** that predicts whether a suggested match is correct.
-
-### Feature Store Schema
-
-The ML Feature Store (`HARMONIZER_DEMO.FEATURE_STORE`) contains:
-
-```ascii
-FEATURE_STORE Schema
-├── ML_TRAINING_DATA           Labeled examples with computed similarity scores
-├── FV_SIMILARITY_SCORES       Core similarity features (materialized view)
-├── FV_SIGNAL_AGREEMENT        Signal agreement metrics (materialized view)
-├── FV_MATCH_CONTEXT           Contextual features (materialized view)
-├── MODEL_METADATA             Model registry metadata
-├── MODEL_PREDICTIONS          Prediction log for monitoring
-├── MODEL_BASELINE_DATA        Training period data for drift comparison
-└── MODEL_SCORING_DATA         Production predictions for MODEL MONITOR
-```
-
-### Training Data Strategy
-
-The model uses a **hybrid approach** with known ground truth:
-
-- **Positive examples**: Standard items matched to themselves (with text variations)
-- **Negative examples**: Cross-category mismatches (provably incorrect)
-- **Hard negatives**: Same category, different product (challenging cases)
-
-Similarity scores are computed using **real Cortex AI functions** (not synthetic), so the model learns actual score patterns.
-
-
-
 ## Cost Tracking & ROI
 
 Cost and ROI metrics are automatically derived from Snowflake system tables—no manual tracking required:
@@ -873,7 +832,6 @@ retail_data_harmonizer/
 │   ├── teardown/
 │   └── utils/
 ├── tests/                         # Test suite
-├── notebooks/                     # ML notebooks
 └── plans/                         # PRD, implementation plans
 ```
 

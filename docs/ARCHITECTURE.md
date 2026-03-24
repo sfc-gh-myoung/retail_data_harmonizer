@@ -22,7 +22,6 @@ This document provides a comprehensive technical overview of the Retail Data Har
 - [Web UI Technology Stack](#web-ui-technology-stack)
 - [Cost Optimization Strategies](#cost-optimization-strategies)
 - [Feedback Loop and Learning](#feedback-loop-and-learning)
-- [ML Feature Store Architecture](#ml-feature-store-architecture)
 - [Database Schema Overview](#database-schema-overview)
 - [Configuration Reference](#configuration-reference)
 - [Build Automation](#build-automation)
@@ -2271,19 +2270,6 @@ Contains configuration, audit logs, and operational metrics.
 | `V_ACCURACY_BY_DIFFICULTY` | Accuracy by difficulty level | METHOD, DIFFICULTY, TOP1_PCT |
 | `V_DEMO_VALIDATION` | Pass/fail vs 85% target | CORTEX_SEARCH_STATUS, TARGET_ACCURACY |
 | `V_ACCURACY_FAILURES` | Detailed failure analysis | RAW_DESCRIPTION, EXPECTED, ACTUAL |
-
-### FEATURE_STORE Schema
-
-Contains ML Feature Views, training data, and model lifecycle tables.
-
-| Table/View | Purpose | Key Columns |
-|------------|---------|-------------|
-| `FV_SIMILARITY_SCORES` | Feature View: algorithm confidence scores | MATCH_ID, CORTEX_SEARCH_SCORE, COSINE_SCORE, EDIT_DISTANCE_SCORE, JACCARD_SCORE, ENSEMBLE_SCORE |
-| `FV_SIGNAL_AGREEMENT` | Feature View: algorithm consensus metrics | MATCH_ID, AGREEMENT_COUNT, METHODS_PARTICIPATING, MAX_SCORE, AVG_SCORE, SCORE_VARIANCE |
-| `FV_MATCH_CONTEXT` | Feature View: contextual difficulty signals | MATCH_ID, CATEGORY_MATCH, HAS_BRAND_IN_DESC, DESCRIPTION_LENGTH, TOKEN_COUNT |
-| `ML_TRAINING_DATA` | Labeled training dataset | MATCH_ID, features (joined from FVs), WAS_CORRECT (label), CREATED_AT |
-| `MODEL_METADATA` | Model registry metadata | MODEL_ID, MODEL_NAME, VERSION, STAGE, METRICS, HYPERPARAMETERS |
-| `MODEL_PREDICTIONS` | Prediction logging for monitoring | PREDICTION_ID, MODEL_ID, MATCH_ID, PREDICTED_CONFIDENCE, ACTUAL_OUTCOME |
 
 
 
