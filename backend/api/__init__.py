@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import snowflake_client as sf
 from backend.api.config import Settings, get_settings
+from backend.api.dev_proxy import ViteDevProxyMiddleware
 
 # Snowflake native telemetry for distributed tracing
 try:
@@ -156,6 +157,10 @@ def create_app() -> FastAPI:
 
     # Register routes
     _register_routers(app)
+
+    if settings.dev_proxy:
+        logger.info("Dev proxy enabled — proxying non-API requests to Vite dev server")
+        app.add_middleware(ViteDevProxyMiddleware)
 
     return app
 

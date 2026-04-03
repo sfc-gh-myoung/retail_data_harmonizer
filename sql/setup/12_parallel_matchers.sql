@@ -1277,13 +1277,13 @@ $$;
 
 
 -- ============================================================================
--- JACCARD_SCORE: Token-based similarity function (Phase 2)
+-- JACCARD_SCORE_JS: Token-based similarity function (Phase 2)
 -- ============================================================================
 -- Returns Jaccard similarity: |intersection| / |union| of word tokens
 -- Catches word-level matches that embeddings/edit distance miss
 -- Example: "COKE ZERO 20OZ" vs "ZERO COKE 20 OZ" → high Jaccard despite word order
 -- FIX: Uses JavaScript UDF instead of SQL subquery to avoid "Unsupported subquery type" error
-CREATE OR REPLACE FUNCTION HARMONIZER_DEMO.HARMONIZED.JACCARD_SCORE(STR1 VARCHAR, STR2 VARCHAR)
+CREATE OR REPLACE FUNCTION HARMONIZER_DEMO.HARMONIZED.JACCARD_SCORE_JS(STR1 VARCHAR, STR2 VARCHAR)
 RETURNS FLOAT
 LANGUAGE JAVASCRIPT
 IMMUTABLE
@@ -1308,6 +1308,41 @@ $$
     return unionSize === 0 ? 0.0 : intersectionSize / unionSize;
 $$;
 
+-- ============================================================================
+-- JACCARD_SCORE: Python vectorized version of JACCARD_SCORE (Phase 2)
+-- ============================================================================
+-- Same logic as the JavaScript UDF above, but uses Python with vectorized
+-- batch processing for better performance at scale.
+CREATE OR REPLACE FUNCTION HARMONIZER_DEMO.HARMONIZED.JACCARD_SCORE(STR1 VARCHAR, STR2 VARCHAR)
+RETURNS FLOAT
+LANGUAGE PYTHON
+IMMUTABLE
+RUNTIME_VERSION = '3.12'
+COMMENT = 'Returns Jaccard token similarity (intersection/union of word sets) - Python vectorized'
+PACKAGES = ('pandas')
+HANDLER = 'jaccard_score'
+AS
+$$
+import pandas
+import re
+from _snowflake import vectorized
+
+@vectorized(input=pandas.DataFrame)
+def jaccard_score(df):
+    def compute(row):
+        s1, s2 = row[0], row[1]
+        if s1 is None or s2 is None:
+            return 0.0
+        s1, s2 = str(s1).strip(), str(s2).strip()
+        if len(s1) == 0 or len(s2) == 0:
+            return 0.0
+        tokens1 = set(re.sub(r'[^A-Za-z0-9 ]', ' ', s1.upper()).split())
+        tokens2 = set(re.sub(r'[^A-Za-z0-9 ]', ' ', s2.upper()).split())
+        intersection_size = len(tokens1 & tokens2)
+        union_size = len(tokens1 | tokens2)
+        return 0.0 if union_size == 0 else intersection_size / union_size
+    return df.apply(compute, axis=1)
+$$;
 
 -- ============================================================================
 -- MATCH_JACCARD_BATCH: Jaccard token similarity matching (Phase 2)

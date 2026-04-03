@@ -1,7 +1,7 @@
 # Retail Data Harmonizer
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://opensource.org/license/apache-2-0)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Tests](https://img.shields.io/badge/tests-887%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)

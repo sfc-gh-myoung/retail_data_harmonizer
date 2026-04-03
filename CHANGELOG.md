@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-03
+
+### Added
+
+- feat(api): reverse-proxy middleware for same-origin Vite dev serving, eliminating cross-port browser blocks
+- feat(sql): Python vectorized JACCARD_SCORE UDF for faster batch token-similarity scoring
+- feat(make): `make dev` target to launch API and React on a single origin
+
+### Changed
+
+- refactor(sql): rename original JavaScript Jaccard UDF to JACCARD_SCORE_JS
+
 ### Fixed
 
 - fix(cli): mock `subprocess.run` in validate command tests to prevent `FileNotFoundError` in CI environments without Snowflake CLI

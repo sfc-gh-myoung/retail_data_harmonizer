@@ -1,6 +1,6 @@
 [project]
 name = "retail-data-harmonizer"
-version = "1.0.0"
+version = "1.1.0"
 description = "Retail Retail Data Harmonization Demo"
 readme = "README.md"
 license = "Apache-2.0"

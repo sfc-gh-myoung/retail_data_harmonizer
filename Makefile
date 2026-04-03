@@ -88,6 +88,7 @@ help: ## Show this help message
 	@echo "────────────────────────────────────────────────────────────────────────"
 	@echo "  make api-serve                  Start JSON API on port 8000"
 	@echo "  make api-serve-dev              Development mode with auto-reload"
+	@echo "  make dev                        Same-origin dev (API+React on :8000)"
 	@echo ""
 	@echo "REACT FRONTEND"
 	@echo "────────────────────────────────────────────────────────────────────────"
@@ -278,6 +279,14 @@ api-serve: ## Start JSON API on port 8000
 .PHONY: api-serve-dev
 api-serve-dev: ## Development mode with auto-reload
 	$(UV) run demo api serve --reload
+
+.PHONY: dev
+dev: ## Start API + React (same-origin on port 8000, for Prisma Browser)
+	@echo "Starting Vite dev server (background) and FastAPI with dev proxy..."
+	@echo "Access the app at http://localhost:8000"
+	@cd $(REACT_DIR) && $(NPM) run dev &
+	@sleep 2
+	APP_DEV_PROXY=true $(UV) run demo api serve --reload
 
 # ============================================================================
 # React Frontend (via CLI)

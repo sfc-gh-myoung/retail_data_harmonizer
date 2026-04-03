@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8000",
     ]
+    dev_proxy: bool = False
 
 
 @lru_cache
