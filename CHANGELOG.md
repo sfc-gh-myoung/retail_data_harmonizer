@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-01
+
+### Added
+
+- feat(api): structured error envelope with classified Snowflake errors (13 categories: network_policy, auth_expired, permission, transient, connection, sql_compilation, etc.) using precedence-based pattern matching
+- feat(api): request correlation via X-Request-ID response headers and UUID tracking middleware
+- feat(api): in-memory circular log buffer (1000 entries) exposed at `/api/v2/logs/app` with level and time filtering
+- feat(api): client-side error reporting endpoint at `POST /api/v2/logs/app/client-error` for centralized debugging
+- feat(web): reusable `AppErrorAlert` component with envelope parsing, severity-based variants, collapsible technical details, VPN guidance, and retry buttons
+- feat(web): typed `ApiError` with automatic ErrorEnvelope parsing preserving endpoint, status, request ID, category, and actions
+- feat(api): credential sanitization for technical details (passwords, tokens, account names, IP addresses)
+- test(api): 35-test coverage suite for error classification system — ErrorEnvelope model, AppError exception, classify_snowflake_error precedence, and sanitization against committed error message fixtures
+- test(fixtures): committed Snowflake error message corpus for network_policy, auth, connection, permission, and sql error categories
+
+### Changed
+
+- refactor(api): `/api/v2/status` now returns structured Snowflake health with classified error envelopes instead of generic error strings
+- refactor(api): `snowflake_client.test_connection` raises exceptions to surface failures instead of silently returning `False`
+- refactor(api): broad exception handlers removed from `/api/v2/logs/errors` so infrastructure failures propagate to the global exception handler
+- refactor(web): `FeatureErrorBoundary` and `SectionWrapper` unified on shared `AppErrorAlert` to remove duplicate error display logic
+- refactor(test): system endpoint tests migrated to `create_app()` factory pattern with error classification scenario coverage (network_policy, auth_expired, object_not_found, query failure)
+- refactor(test): logs and snowflake_client tests updated to match exception-propagating error envelope behavior
+
+### Fixed
+
+- fix(web): VPN/network-policy errors now display actionable guidance with request IDs instead of appearing as empty data or generic server errors
+- fix(web): nested `<button>` hydration warning in pipeline funnel by using `asChild` on `TooltipTrigger`
+- fix(web): React Router v7 future flag warnings by opting into `v7_startTransition` and `v7_relativeSplatPath`
+- fix(api): deprecation warning in app log buffer by mapping `warn` level to Python logging `warning` method
+- fix(test): replace `type: ignore[arg-type]` with `cast(Any, ...)` in Pydantic validation tests for type-safe invalid-input assertions
+
 ## [1.1.0] - 2026-04-03
 
 ### Added

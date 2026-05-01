@@ -51,16 +51,8 @@ def _filtered_headers(
     headers: list[tuple[bytes, bytes]] | httpx.Headers,
 ) -> dict[str, str]:
     if isinstance(headers, httpx.Headers):
-        return {
-            k: v
-            for k, v in headers.items()
-            if k.lower() not in _HOP_BY_HOP
-        }
-    return {
-        k.decode(): v.decode()
-        for k, v in headers
-        if k.decode().lower() not in _HOP_BY_HOP
-    }
+        return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
+    return {k.decode(): v.decode() for k, v in headers if k.decode().lower() not in _HOP_BY_HOP}
 
 
 class ViteDevProxyMiddleware:

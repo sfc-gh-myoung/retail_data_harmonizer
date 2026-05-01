@@ -19,7 +19,7 @@ with patch("backend.api.snowflake_client") as mock_sf:
     mock_sf.test_connection = AsyncMock(return_value=True)
     from backend.api import app
 
-client = TestClient(app)
+client = TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture(autouse=True)
@@ -92,15 +92,21 @@ class TestLogsErrors:
     @patch("backend.services.logs.LogsService.get_recent_errors_count", new_callable=AsyncMock)
     @patch("backend.services.logs.LogsService.get_recent_errors", new_callable=AsyncMock)
     def test_errors_handles_exception(self, mock_errors, mock_count) -> None:
-        """Test errors returns empty on exception."""
+        """Test errors propagates exception with error envelope."""
         mock_errors.side_effect = Exception("Query failed")
 
         resp = client.get("/api/v2/logs/errors")
-        assert resp.status_code == 200
+
+        # New behavior: exceptions are classified and returned as error envelopes
+        assert resp.status_code == 500
         data = resp.json()
 
-        assert data["recentErrors"]["entries"] == []
-        assert data["recentErrors"]["totalPages"] == 1
+        # Should contain error envelope structure
+        assert "error_id" in data
+        assert "request_id" in data
+        assert "category" in data
+        assert "message" in data
+        assert data["source"] in ["snowflake", "api", "validation", "unknown"]
 
 
 # ---------------------------------------------------------------------------

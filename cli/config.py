@@ -20,7 +20,7 @@ class Config:
         SCHEMA_ANALYTICS: Fully qualified analytics schema.
     """
 
-    VERSION = "1.1.0"
+    VERSION = "1.2.0"
     DATABASE = "HARMONIZER_DEMO"
     WAREHOUSE = "HARMONIZER_DEMO_WH"
     ROLE = "HARMONIZER_DEMO_ROLE"

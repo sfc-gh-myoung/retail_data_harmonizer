@@ -1,0 +1,17 @@
+# Snowflake Connection Error Fixtures
+# Generic connection failures (not network policy)
+
+## Pattern 1: Generic 08001
+08001: Unable to connect to Snowflake. Connection could not be established. Check network connectivity.
+
+## Pattern 2: Connection failed
+OperationalError: Connection failed: unable to establish connection to <account>.snowflakecomputing.com
+
+## Pattern 3: Cannot connect
+snowflake.connector.errors.DatabaseError: Cannot connect to Snowflake server. Verify account name and region.
+
+## Pattern 4: Connection reset
+Connection reset by peer during query execution. The connection was interrupted unexpectedly.
+
+## Pattern 5: Transient connectivity
+Temporarily unavailable: Connection to Snowflake service is experiencing transient issues. Retry the operation.

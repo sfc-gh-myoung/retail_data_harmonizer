@@ -125,25 +125,25 @@ describe('SectionWrapper', () => {
       expect(screen.getByText('Failed to load KPIs')).toBeInTheDocument()
     })
 
-    it('shows Retry button when error occurs', () => {
+    it('shows Try Again button when error occurs', () => {
       renderWithProviders(
         <SectionWrapper sectionName="Charts" fallback={<div>Loading...</div>}>
           <ThrowError shouldThrow={true} />
         </SectionWrapper>
       )
 
-      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
     })
 
-    it('displays generic message for non-ApiError', () => {
+    it('displays error message from Error instance', () => {
       renderWithProviders(
         <SectionWrapper sectionName="Data" fallback={<div>Loading...</div>}>
           <ThrowError shouldThrow={true} message="Some error" />
         </SectionWrapper>
       )
 
-      // SectionWrapper shows generic message for non-ApiError types
-      expect(screen.getByText('Something went wrong loading this section.')).toBeInTheDocument()
+      // AppErrorAlert displays the actual error message
+      expect(screen.getByText('Some error')).toBeInTheDocument()
     })
   })
 
@@ -188,14 +188,15 @@ describe('SectionWrapper', () => {
       expect(screen.getByText('This feature is not available yet. You may need to run the demo setup first.')).toBeInTheDocument()
     })
 
-    it('shows default title for server errors (500)', () => {
+    it('shows API Error title for server errors (500)', () => {
       renderWithProviders(
         <SectionWrapper sectionName="Metrics" fallback={<div>Loading...</div>}>
           <ThrowApiError shouldThrow={true} status={500} message="Server error" />
         </SectionWrapper>
       )
 
-      expect(screen.getByText('Failed to load Metrics')).toBeInTheDocument()
+      // AppErrorAlert uses "API Error" for 500 errors without envelope
+      expect(screen.getByText('API Error')).toBeInTheDocument()
     })
 
     it('shows user-friendly message for server errors', () => {
@@ -233,7 +234,7 @@ describe('SectionWrapper', () => {
       throwTracker.shouldThrow = false
 
       // Click retry
-      fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }))
 
       // Should re-render children successfully
       await waitFor(() => {
@@ -261,7 +262,7 @@ describe('SectionWrapper', () => {
       expect(screen.getByText('Failed to load Persistent Error')).toBeInTheDocument()
 
       // Click retry - still shows error
-      fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+      fireEvent.click(screen.getByRole('button', { name: /try again/i }))
 
       // Should still show error
       await waitFor(() => {
@@ -297,7 +298,8 @@ describe('SectionWrapper', () => {
         </SectionWrapper>
       )
 
-      expect(screen.getByText('Something went wrong loading this section.')).toBeInTheDocument()
+      // AppErrorAlert shows generic message for non-Error objects
+      expect(screen.getByText('An unexpected error occurred')).toBeInTheDocument()
     })
   })
 })

@@ -1,0 +1,18 @@
+# Snowflake Network Policy Error Fixtures
+# Source: prompt_forge_v2 error patterns and synthetic examples
+# These represent network policy violations that should be classified as 'network_policy' category
+
+## Pattern 1: "not allowed to access Snowflake"
+250001 (08001): Failed to connect to DB: <account>.snowflakecomputing.com:443. Incoming request with IP address <ip> is not allowed to access Snowflake. Contact your local security administrator.
+
+## Pattern 2: "network policy" explicit mention
+ProgrammingError: 250001 (08001): Failed to connect to DB. Network policy 'RESTRICTIVE_POLICY' blocked incoming request from IP <ip>. Contact your administrator.
+
+## Pattern 3: IP not in allowlist
+Connection failed: IP address 203.0.113.45 not allowed by network policy. Add this IP to the allowlist or connect via VPN.
+
+## Pattern 4: Generic "incoming request not allowed"
+Incoming request from <source> not allowed to access Snowflake instance. Verify network policy configuration.
+
+## Pattern 5: Error code 250001 with context
+snowflake.connector.errors.DatabaseError: 250001 (08001): Failed to connect to DB: Cannot establish connection. IP not in allowlist.

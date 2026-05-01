@@ -5,6 +5,8 @@ Covers model instantiation, field validation, serialization, and edge cases.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -89,7 +91,7 @@ class TestMatchSearchRequest:
     def test_sort_order_literal_validation(self) -> None:
         """Test sortOrder must be 'asc' or 'desc'."""
         with pytest.raises(ValidationError) as exc_info:
-            MatchSearchRequest(sortOrder="invalid")  # type: ignore[arg-type]
+            MatchSearchRequest(sortOrder=cast(Any, "invalid"))
         assert "Input should be 'asc' or 'desc'" in str(exc_info.value)
 
     def test_serialization(self) -> None:
@@ -394,7 +396,7 @@ class TestBulkAction:
     def test_bulk_action_request_invalid_action(self) -> None:
         """Test BulkActionRequest rejects invalid action."""
         with pytest.raises(ValidationError) as exc_info:
-            BulkActionRequest(ids=["id1"], action="invalid")  # type: ignore[arg-type]
+            BulkActionRequest(ids=["id1"], action=cast(Any, "invalid"))
         assert "Input should be 'accept' or 'reject'" in str(exc_info.value)
 
     def test_bulk_action_response_success(self) -> None:

@@ -9,23 +9,30 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
+
+# Snowflake native telemetry for distributed tracing
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from backend.api import snowflake_client as sf
 from backend.api.config import Settings, get_settings
 from backend.api.dev_proxy import ViteDevProxyMiddleware
+from backend.api.errors import AppError, ErrorEnvelope, classify_snowflake_error
 
-# Snowflake native telemetry for distributed tracing
 try:
-    from snowflake import telemetry
+    from snowflake import telemetry as _telemetry
 
+    telemetry: Any = _telemetry
     TELEMETRY_AVAILABLE = hasattr(telemetry, "create_span")
 except ImportError:
+    telemetry = None
     TELEMETRY_AVAILABLE = False
-    telemetry = None  # type: ignore[assignment]
 
 logger = logging.getLogger("retail_harmonizer.api")
 
@@ -80,17 +87,22 @@ def _configure_middleware(app: FastAPI, settings: Settings) -> None:
 
 
 def _add_request_logging(app: FastAPI) -> None:
-    """Add request timing and telemetry middleware."""
+    """Add request timing, telemetry, and request ID middleware."""
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         """Log requests and create telemetry spans for distributed tracing."""
+        # Generate request ID for correlation
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+
         start = time.perf_counter()
 
         if TELEMETRY_AVAILABLE and telemetry is not None:
             with telemetry.create_span(f"api_{request.url.path.replace('/', '_')}") as span:  # type: ignore[union-attr]
                 span.set_attribute("http.method", request.method)
                 span.set_attribute("http.path", request.url.path)
+                span.set_attribute("request.id", request_id)
                 response = await call_next(request)
                 span.set_attribute("http.status_code", response.status_code)
                 elapsed_ms = (time.perf_counter() - start) * 1000
@@ -99,12 +111,16 @@ def _add_request_logging(app: FastAPI) -> None:
             response = await call_next(request)
             elapsed_ms = (time.perf_counter() - start) * 1000
 
+        # Add request ID to response headers for client correlation
+        response.headers["X-Request-ID"] = request_id
+
         logger.info(
-            "%s %s — %d (%.1fms)",
+            "%s %s — %d (%.1fms) [%s]",
             request.method,
             request.url.path,
             response.status_code,
             elapsed_ms,
+            request_id,
         )
         return response
 
@@ -137,6 +153,105 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(logs.router)  # /api/v2/logs
 
 
+def _add_exception_handlers(app: FastAPI) -> None:
+    """Register global exception handlers for structured error responses."""
+
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        """Handle application-level errors with structured envelopes."""
+        logger.warning(
+            "AppError [%s]: %s (request_id=%s, error_id=%s)",
+            exc.envelope.category,
+            exc.envelope.message,
+            exc.envelope.request_id,
+            exc.envelope.error_id,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.envelope.model_dump(),
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        """Handle Pydantic validation errors."""
+        request_id = getattr(request.state, "request_id", "unknown")
+        error_id = str(uuid.uuid4())
+
+        envelope = ErrorEnvelope(
+            error_id=error_id,
+            request_id=request_id,
+            category="validation",
+            severity="error",
+            title="Validation Error",
+            message="The request data failed validation checks.",
+            actions=[
+                "Review the request data format",
+                "Check that all required fields are provided",
+                "Verify field types match the API schema",
+            ],
+            retryable=False,
+            technical_details=str(exc),
+            source="api",
+        )
+
+        logger.warning("ValidationError: %s (request_id=%s)", exc, request_id)
+
+        return JSONResponse(status_code=422, content=envelope.model_dump())
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Handle unhandled exceptions with structured envelopes.
+
+        Classifies Snowflake exceptions using the pattern catalog.
+        Other exceptions are treated as internal server errors.
+        """
+        request_id = getattr(request.state, "request_id", "unknown")
+
+        # Check if this is a Snowflake exception
+        exc_type_name = type(exc).__module__
+        if "snowflake" in exc_type_name.lower():
+            # Classify Snowflake error
+            envelope = classify_snowflake_error(exc, request_id=request_id)
+            status_code = 503  # Service Unavailable for Snowflake connectivity issues
+            logger.error(
+                "Snowflake error [%s]: %s (request_id=%s, error_id=%s)",
+                envelope.category,
+                str(exc),
+                request_id,
+                envelope.error_id,
+                exc_info=True,
+            )
+        else:
+            # Generic internal server error
+            error_id = str(uuid.uuid4())
+            envelope = ErrorEnvelope(
+                error_id=error_id,
+                request_id=request_id,
+                category="server",
+                severity="critical",
+                title="Internal Server Error",
+                message="An unexpected error occurred while processing your request.",
+                actions=[
+                    "Try the operation again",
+                    "Contact support if the issue persists",
+                    f"Reference error ID: {error_id}",
+                ],
+                retryable=True,
+                technical_details=f"{type(exc).__name__}: {str(exc)}",
+                source="api",
+            )
+            status_code = 500
+            logger.error(
+                "Unhandled exception: %s (request_id=%s, error_id=%s)",
+                exc,
+                request_id,
+                error_id,
+                exc_info=True,
+            )
+
+        return JSONResponse(status_code=status_code, content=envelope.model_dump())
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -154,6 +269,9 @@ def create_app() -> FastAPI:
     # Configure middleware (order matters: CORS must be first)
     _configure_middleware(app, settings)
     _add_request_logging(app)
+
+    # Register exception handlers
+    _add_exception_handlers(app)
 
     # Register routes
     _register_routers(app)

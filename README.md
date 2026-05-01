@@ -1,7 +1,7 @@
 # Retail Data Harmonizer
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](https://opensource.org/license/apache-2-0)
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Tests](https://img.shields.io/badge/tests-887%20passing-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -610,6 +610,38 @@ SELECT * FROM ANALYTICS.V_PIPELINE_ERRORS_ANALYSIS;
 -- Recent errors with full context
 SELECT * FROM ANALYTICS.V_RECENT_ERRORS;
 ```
+
+**API-Level Error Diagnostics** (new in v1.1.0):
+
+The API now provides structured error envelopes with request correlation for troubleshooting:
+
+```bash
+# Get recent application logs (last 100 entries)
+curl http://localhost:8000/api/v2/logs/app
+
+# Filter by level (debug, info, warn, error)
+curl http://localhost:8000/api/v2/logs/app?level=error&limit=50
+
+# Filter by time (ISO 8601 timestamp)
+curl http://localhost:8000/api/v2/logs/app?since=2024-01-15T10:00:00Z
+```
+
+**Request Correlation**:
+- Every API response includes an `X-Request-ID` header for tracking
+- Error responses include a structured `ErrorEnvelope` with:
+  - `category`: Classified error type (e.g., `network_policy`, `auth_expired`, `permission`)
+  - `message`: User-friendly error description
+  - `actions`: Recommended troubleshooting steps
+  - `technical_details`: Sanitized error details (credentials redacted)
+  - `request_id`: Correlation ID matching response header
+
+**Common Error Categories**:
+- `network_policy`: IP address not allowed (VPN required)
+- `auth_expired`: Session expired, re-authentication needed
+- `permission`: Insufficient Snowflake privileges
+- `connection`: Generic Snowflake connection failure
+- `sql_compilation`: Query syntax or object not found
+- `transient`: Temporary failure, retry recommended
 
 ### Native Snowflake Telemetry
 

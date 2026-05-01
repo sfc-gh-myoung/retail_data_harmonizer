@@ -54,8 +54,10 @@ export function PipelineFunnel({
             <span className="font-semibold">Pipeline Phase Progress</span>
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger>
-                  <Info className="h-4 w-4 text-muted-foreground" />
+                <TooltipTrigger asChild>
+                  <span className="cursor-help">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   Live view of items flowing through the matching pipeline. Shows categorization,

@@ -1,0 +1,17 @@
+# Snowflake Permission Error Fixtures
+# These represent authorization/privilege failures
+
+## Pattern 1: Insufficient privileges
+002003 (42501): SQL access control error: Insufficient privileges to operate on table 'ANALYTICS.PUBLIC.SALES'
+
+## Pattern 2: Not authorized
+ProgrammingError: User 'DEMO_USER' is not authorized to perform operation SELECT on object 'SECURE_VIEW'
+
+## Pattern 3: Permission denied
+Permission denied: ROLE 'ANALYST_ROLE' does not have USAGE privilege on WAREHOUSE 'COMPUTE_WH'
+
+## Pattern 4: Access denied
+Access denied for ROLE 'READER_ROLE' on DATABASE 'RESTRICTED_DB'. Contact your Snowflake administrator to request access.
+
+## Pattern 5: Grant missing
+Operation failed: No grant exists for the requested operation. Use GRANT <privilege> TO ROLE <role>

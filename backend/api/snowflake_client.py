@@ -15,12 +15,13 @@ from typing import Any
 from backend.snowflake import get_client
 
 try:
-    from snowflake import telemetry
+    from snowflake import telemetry as _telemetry
 
+    telemetry: Any = _telemetry
     TELEMETRY_AVAILABLE = hasattr(telemetry, "create_span")
 except ImportError:
     TELEMETRY_AVAILABLE = False
-    telemetry = None  # type: ignore[assignment]
+    telemetry = None
 
 logger = logging.getLogger("retail_harmonizer.api.snowflake")
 
@@ -126,7 +127,19 @@ async def query(sql: str, *, cache_ttl: float | None = DEFAULT_CACHE_TTL) -> lis
 
     logger.debug("QUERY: %s …", sql_preview)
 
-    rows = await _client().async_query(sql)
+    try:
+        rows = await _client().async_query(sql)
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.error(
+            "QUERY FAILED (%.1fms): %s — Error: %s",
+            elapsed_ms,
+            sql_preview,
+            e,
+            exc_info=True,
+        )
+        # Re-raise for API layer to classify
+        raise
 
     elapsed_ms = (time.perf_counter() - start) * 1000
     logger.debug("QUERY OK — %d rows (%.1fms)", len(rows), elapsed_ms)
@@ -161,6 +174,10 @@ async def execute(sql: str) -> str:
     Returns:
         Raw string output from Snowflake execution (typically status message).
 
+    Raises:
+        Exception: Propagates Snowflake connection/execution failures for classification.
+            API layer should catch and classify using backend.api.errors.classify_snowflake_error().
+
     Side Effects:
         - Executes SQL against Snowflake (network I/O)
         - May modify database state (INSERT, UPDATE, DELETE, ALTER)
@@ -170,7 +187,19 @@ async def execute(sql: str) -> str:
     sql_preview = " ".join(sql.split())[:120]
     logger.debug("EXEC: %s …", sql_preview)
 
-    result = await _client().async_execute(sql)
+    try:
+        result = await _client().async_execute(sql)
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.error(
+            "EXEC FAILED (%.1fms): %s — Error: %s",
+            elapsed_ms,
+            sql_preview,
+            e,
+            exc_info=True,
+        )
+        # Re-raise for API layer to classify
+        raise
 
     elapsed_ms = (time.perf_counter() - start) * 1000
     logger.debug("EXEC OK (%.1fms)", elapsed_ms)
@@ -178,12 +207,25 @@ async def execute(sql: str) -> str:
 
 
 async def test_connection() -> bool:
-    """Test the Snowflake connection."""
+    """Test the Snowflake connection.
+
+    Raises:
+        Exception: Propagates Snowflake connection/query failures for classification.
+            Callers should handle exceptions and classify them using
+            backend.api.errors.classify_snowflake_error().
+
+    Returns:
+        True if connection test succeeds.
+    """
+    logger.debug("Testing Snowflake connection...")
     try:
         rows = await query("SELECT 'ok' AS status")
+        logger.debug("Connection test successful")
         return len(rows) > 0
-    except Exception:
-        return False
+    except Exception as e:
+        logger.error("Connection test failed: %s", e, exc_info=True)
+        # Re-raise for caller to classify and handle
+        raise
 
 
 # ---------------------------------------------------------------------------

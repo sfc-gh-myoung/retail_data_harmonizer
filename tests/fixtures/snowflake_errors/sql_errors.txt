@@ -1,0 +1,17 @@
+# Snowflake SQL Error Fixtures
+# SQL compilation and runtime errors
+
+## Pattern 1: SQL compilation error (002003)
+002003 (42000): SQL compilation error: syntax error line 1 at position 15 unexpected 'FORM'. Did you mean 'FROM'?
+
+## Pattern 2: Object does not exist
+002003 (42S02): SQL compilation error: Object 'DATABASE.SCHEMA.NONEXISTENT_TABLE' does not exist or not authorized.
+
+## Pattern 3: Division by zero
+100051 (22012): SQL execution error: Division by zero encountered in column 'RATIO_CALC'
+
+## Pattern 4: Runtime query failure
+SQL execution error: Query execution failed due to resource constraints. Increase warehouse size or reduce query complexity.
+
+## Pattern 5: Feature not configured
+002003: Model registry not configured for database 'ANALYTICS'. Run setup commands or contact administrator.

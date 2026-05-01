@@ -21,14 +21,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
-
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
 
 class SnowflakeClient(ABC):

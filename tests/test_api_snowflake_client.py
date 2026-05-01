@@ -206,7 +206,9 @@ class TestTestConnection:
     @pytest.mark.asyncio
     @patch("backend.api.snowflake_client._client")
     async def test_test_connection_failure(self, mock_client) -> None:
-        """test_connection returns False on exception."""
+        """test_connection raises exception on failure."""
         mock_client.return_value.async_query = AsyncMock(side_effect=Exception("Connection failed"))
-        result = await sf.test_connection()
-        assert result is False
+
+        # New behavior: exceptions are raised instead of returning False
+        with pytest.raises(Exception, match="Connection failed"):
+            await sf.test_connection()

@@ -1,0 +1,17 @@
+# Snowflake Authentication Error Fixtures
+# These represent authentication failures (expired, invalid tokens, etc.)
+
+## Pattern 1: Token expired (390114)
+390114: Authentication token has expired. The user must authenticate again. SQLSTATE: 08001
+
+## Pattern 2: Session expired (390318)
+ProgrammingError: 390318 (08001): Session token has expired. Please re-authenticate to continue.
+
+## Pattern 3: Auth expired message
+snowflake.connector.errors.DatabaseError: Authentication expired. Your session is no longer valid. Please log in again.
+
+## Pattern 4: PAT invalid
+PAT_INVALID: Programmatic access token is invalid or has been revoked. Generate a new token from the Snowflake UI.
+
+## Pattern 5: Token mismatch
+Token validation failed: token mismatch detected. The provided credentials do not match the expected format.

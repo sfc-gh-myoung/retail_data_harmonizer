@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
 from backend.services.base import BaseService
@@ -64,7 +64,7 @@ class PipelineService(BaseService):
     """
 
     # Stream Pipeline DAG structure
-    DAG_HIERARCHY: dict[str, TaskMetadata] = None  # type: ignore[assignment]
+    DAG_HIERARCHY: dict[str, TaskMetadata] = field(default_factory=dict)
 
     STREAM_PIPELINE_TASKS: frozenset[str] = frozenset(
         {

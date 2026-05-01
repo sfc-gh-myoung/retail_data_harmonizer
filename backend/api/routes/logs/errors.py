@@ -35,44 +35,32 @@ async def get_errors(
     cache_key = f"logs:errors:{page}:{page_size}"
 
     async def fetch_errors() -> ErrorsResponse:
-        try:
-            errors_data, errors_count = await _fetch_data(svc, page, page_size)
-            total_pages = max(1, (errors_count + page_size - 1) // page_size)
+        errors_data, errors_count = await _fetch_data(svc, page, page_size)
+        total_pages = max(1, (errors_count + page_size - 1) // page_size)
 
-            entries = [
-                RecentError(
-                    logId=str(e.get("LOG_ID", "")),
-                    runId=str(e.get("RUN_ID", "")),
-                    stepName=e.get("STEP_NAME", ""),
-                    category=e.get("CATEGORY", ""),
-                    errorMessage=e.get("ERROR_MESSAGE", ""),
-                    itemsFailed=int(e.get("ITEMS_FAILED", 0) or 0),
-                    queryId=e.get("QUERY_ID"),
-                    createdAt=str(e.get("CREATED_AT", "")),
-                )
-                for e in errors_data
-            ]
+        entries = [
+            RecentError(
+                logId=str(e.get("LOG_ID", "")),
+                runId=str(e.get("RUN_ID", "")),
+                stepName=e.get("STEP_NAME", ""),
+                category=e.get("CATEGORY", ""),
+                errorMessage=e.get("ERROR_MESSAGE", ""),
+                itemsFailed=int(e.get("ITEMS_FAILED", 0) or 0),
+                queryId=e.get("QUERY_ID"),
+                createdAt=str(e.get("CREATED_AT", "")),
+            )
+            for e in errors_data
+        ]
 
-            return ErrorsResponse(
-                recentErrors=PaginatedErrors(
-                    entries=entries,
-                    total=errors_count,
-                    page=page,
-                    pageSize=page_size,
-                    totalPages=total_pages,
-                )
+        return ErrorsResponse(
+            recentErrors=PaginatedErrors(
+                entries=entries,
+                total=errors_count,
+                page=page,
+                pageSize=page_size,
+                totalPages=total_pages,
             )
-        except Exception as e:
-            logger.warning(f"Failed to fetch errors: {e}")
-            return ErrorsResponse(
-                recentErrors=PaginatedErrors(
-                    entries=[],
-                    total=0,
-                    page=page,
-                    pageSize=page_size,
-                    totalPages=1,
-                )
-            )
+        )
 
     return await cache.get_or_fetch(cache_key, CACHE_TTL_SECONDS, fetch_errors)
 
