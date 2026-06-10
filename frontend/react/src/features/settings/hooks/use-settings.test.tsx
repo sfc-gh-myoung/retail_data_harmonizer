@@ -4,9 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 import {
   useSettings,
-  useUpdateSettings,
-  useResetSettings,
-  useReEvaluate,
   useResetPipeline,
 } from './use-settings'
 
@@ -16,7 +13,7 @@ vi.mock('@/lib/api', () => ({
   postApi: vi.fn(),
 }))
 
-import { fetchApi, patchApi, postApi } from '@/lib/api'
+import { fetchApi, postApi } from '@/lib/api'
 
 const mockSettings = {
   weights: {
@@ -109,119 +106,8 @@ describe('useSettings', () => {
   })
 })
 
-describe('useUpdateSettings', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
 
-  it('calls PATCH endpoint with partial settings', async () => {
-    vi.mocked(patchApi).mockResolvedValueOnce(mockSettings)
 
-    const queryClient = createTestQueryClient()
-    const { result } = renderHook(() => useUpdateSettings(), {
-      wrapper: createWrapper(queryClient),
-    })
-
-    const partialUpdate = {
-      weights: { ...mockSettings.weights, cortexSearch: 0.4 },
-    }
-
-    await act(async () => {
-      result.current.mutate(partialUpdate)
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(patchApi).toHaveBeenCalledWith('/v2/settings', partialUpdate, expect.any(Object))
-  })
-
-  it('invalidates settings query on success', async () => {
-    vi.mocked(patchApi).mockResolvedValueOnce(mockSettings)
-
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useUpdateSettings(), {
-      wrapper: createWrapper(queryClient),
-    })
-
-    await act(async () => {
-      result.current.mutate({ weights: mockSettings.weights })
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['settings'] })
-  })
-})
-
-describe('useResetSettings', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('calls reset endpoint', async () => {
-    vi.mocked(postApi).mockResolvedValueOnce({ success: true })
-
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useResetSettings(), {
-      wrapper: createWrapper(queryClient),
-    })
-
-    await act(async () => {
-      result.current.mutate()
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(postApi).toHaveBeenCalledWith('/settings/reset', {}, expect.any(Object))
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['settings'] })
-  })
-})
-
-describe('useReEvaluate', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('calls re-evaluate endpoint', async () => {
-    vi.mocked(postApi).mockResolvedValueOnce({ success: true })
-
-    const { result } = renderHook(() => useReEvaluate(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate()
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(postApi).toHaveBeenCalledWith('/v2/settings/re-evaluate', {}, expect.any(Object))
-  })
-
-  it('invalidates matches and dashboard queries on success', async () => {
-    vi.mocked(postApi).mockResolvedValueOnce({ success: true })
-
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useReEvaluate(), {
-      wrapper: createWrapper(queryClient),
-    })
-
-    await act(async () => {
-      result.current.mutate()
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['matches'] })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] })
-  })
-})
 
 describe('useResetPipeline', () => {
   beforeEach(() => {

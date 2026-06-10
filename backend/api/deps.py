@@ -20,8 +20,6 @@ from backend.services import (
     DashboardService,
     LogsService,
     PipelineService,
-    ReviewService,
-    SettingsService,
     TestingService,
 )
 from backend.services.cache import SyncTTLCache, TTLCache, get_async_cache, get_sync_cache
@@ -100,15 +98,6 @@ def get_dashboard_service(
     return DashboardService(db_name=db_name, sf=sf_client, cache=cache)
 
 
-def get_review_service(
-    db_name: DatabaseDep,
-    sf_client: SfClientDep,
-    cache: CacheDep,
-) -> ReviewService:
-    """Factory for ReviewService with injected dependencies."""
-    return ReviewService(db_name=db_name, sf=sf_client, cache=cache)
-
-
 def get_pipeline_service(
     db_name: DatabaseDep,
     sf_client: SfClientDep,
@@ -145,23 +134,12 @@ def get_logs_service(
     return LogsService(db_name=db_name, sf=sf_client, cache=cache)
 
 
-def get_settings_service(
-    db_name: DatabaseDep,
-    sf_client: SfClientDep,
-    cache: CacheDep,
-) -> SettingsService:
-    """Factory for SettingsService with injected dependencies."""
-    return SettingsService(db_name=db_name, sf=sf_client, cache=cache)
-
-
 # ---------------------------------------------------------------------------
 # Service type aliases for route injection
 # ---------------------------------------------------------------------------
 
 DashboardServiceDep = Annotated[DashboardService, Depends(get_dashboard_service)]
-ReviewServiceDep = Annotated[ReviewService, Depends(get_review_service)]
 PipelineServiceDep = Annotated[PipelineService, Depends(get_pipeline_service)]
 ComparisonServiceDep = Annotated[ComparisonService, Depends(get_comparison_service)]
 TestingServiceDep = Annotated[TestingService, Depends(get_testing_service)]
 LogsServiceDep = Annotated[LogsService, Depends(get_logs_service)]
-SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]

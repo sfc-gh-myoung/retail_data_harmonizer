@@ -74,6 +74,8 @@ help: ## Show this help message
 	@echo ""
 	@echo "DATA PIPELINE"
 	@echo "────────────────────────────────────────────────────────────────────────"
+	@echo "  make resume                    Resume warehouse + tasks + dynamic tables"
+	@echo "  make suspend                   Suspend warehouse + tasks + dynamic tables"
 	@echo "  make data-run                  Enable Task DAG + trigger execution"
 	@echo "  make data-stop                 Disable Task DAG"
 	@echo "  make data-status               Show match status and metrics"
@@ -255,6 +257,50 @@ data-status: ## Show match status and metrics
 .PHONY: data-reset
 data-reset: ## Reset pipeline results
 	$(UV) run demo -c $(CONN) data reset
+
+# ============================================================================
+# Start / Stop (Warehouse + Tasks + Dynamic Tables)
+# ============================================================================
+
+.PHONY: resume
+resume: ## Resume warehouse, tasks, and dynamic tables
+	@echo "Resuming warehouse..."
+	@$(SNOW) sql -c $(CONN) -q "ALTER WAREHOUSE HARMONIZER_DEMO_WH RESUME IF SUSPENDED"
+	@echo "Resuming tasks..."
+	@$(SNOW) sql -c $(CONN) -q "CALL HARMONIZER_DEMO.HARMONIZED.ENABLE_PARALLEL_PIPELINE_TASKS()"
+	@echo "Resuming dynamic tables..."
+	@$(SNOW) sql -c $(CONN) -q " \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_KPIS RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_SOURCES RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CATEGORIES RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CONFIDENCE_BEST RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CONFIDENCE_ENSEMBLE RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_SCALE RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_METHOD_ACCURACY RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_OPTIMIZATION_METRICS RESUME; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_PIPELINE_PHASE_STATUS RESUME; \
+	"
+	@echo "All resources started."
+
+.PHONY: suspend
+suspend: ## Suspend warehouse, tasks, and dynamic tables
+	@echo "Suspending tasks..."
+	@$(SNOW) sql -c $(CONN) -q "CALL HARMONIZER_DEMO.HARMONIZED.DISABLE_PARALLEL_PIPELINE_TASKS()"
+	@echo "Suspending dynamic tables..."
+	@$(SNOW) sql -c $(CONN) -q " \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_KPIS SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_SOURCES SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CATEGORIES SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CONFIDENCE_BEST SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_CONFIDENCE_ENSEMBLE SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_DASHBOARD_SCALE SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_METHOD_ACCURACY SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_OPTIMIZATION_METRICS SUSPEND; \
+		ALTER DYNAMIC TABLE HARMONIZER_DEMO.ANALYTICS.DT_PIPELINE_PHASE_STATUS SUSPEND; \
+	"
+	@echo "Suspending warehouse..."
+	@$(SNOW) sql -c $(CONN) -q "ALTER WAREHOUSE HARMONIZER_DEMO_WH SUSPEND"
+	@echo "All resources stopped."
 
 # ============================================================================
 # Web Application

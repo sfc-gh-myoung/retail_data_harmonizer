@@ -32,21 +32,22 @@ class WeightsConfig(BaseModel):
 class ThresholdsConfig(BaseModel):
     """Match threshold configuration for automated decision boundaries.
 
-    Thresholds define score ranges for automatic accept/reject decisions.
-    Must satisfy: reject < reviewMin < reviewMax < autoAccept.
-    Scores between reviewMin and reviewMax require manual review.
+    Thresholds are fractional scores in the range 0.0-1.0. Two boundaries are
+    editable: autoAccept and reject. The review band is derived as
+    [reject, autoAccept), so reviewMin == reject and reviewMax == autoAccept.
+    Must satisfy: reject < autoAccept.
 
     Attributes:
-        autoAccept: Minimum score for automatic acceptance (0-100).
-        reject: Maximum score for automatic rejection (0-100).
-        reviewMin: Lower bound of manual review range (0-100).
-        reviewMax: Upper bound of manual review range (0-100).
+        autoAccept: Minimum score for automatic acceptance (0.0-1.0).
+        reject: Score below which matches are auto-rejected (0.0-1.0).
+        reviewMin: Lower bound of manual review range (derived = reject).
+        reviewMax: Upper bound of manual review range (derived = autoAccept).
     """
 
-    autoAccept: float = Field(..., ge=0, le=100, description="Auto-accept threshold (0-100)")
-    reject: float = Field(..., ge=0, le=100, description="Auto-reject threshold (0-100)")
-    reviewMin: float = Field(..., ge=0, le=100, description="Review range lower bound (0-100)")
-    reviewMax: float = Field(..., ge=0, le=100, description="Review range upper bound (0-100)")
+    autoAccept: float = Field(..., ge=0, le=1, description="Auto-accept threshold (0.0-1.0)")
+    reject: float = Field(..., ge=0, le=1, description="Auto-reject threshold (0.0-1.0)")
+    reviewMin: float = Field(..., ge=0, le=1, description="Review range lower bound (0.0-1.0)")
+    reviewMax: float = Field(..., ge=0, le=1, description="Review range upper bound (0.0-1.0)")
 
 
 class PerformanceConfig(BaseModel):
@@ -107,4 +108,19 @@ class SettingsResponse(BaseModel):
     thresholds: ThresholdsConfig
     performance: PerformanceConfig
     cost: CostConfig
+    automation: AutomationConfig
+
+
+class SettingsUpdateRequest(BaseModel):
+    """Editable settings payload for persisting changes to ANALYTICS.CONFIG.
+
+    Reuses the editable config groups. Cost settings are not user-editable from
+    the Settings page and are therefore omitted. The review band is derived from
+    the accept/reject thresholds, so reviewMin/reviewMax are accepted for
+    completeness but not persisted independently.
+    """
+
+    weights: WeightsConfig
+    thresholds: ThresholdsConfig
+    performance: PerformanceConfig
     automation: AutomationConfig

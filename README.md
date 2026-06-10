@@ -130,7 +130,7 @@ uv run demo setup
 make setup
 ```
 
-This creates the `HARMONIZER_DEMO` database with three schemas (`RAW`, `HARMONIZED`, `ANALYTICS`) and loads ~1,000 standard items and ~12,000 raw items.
+This creates the `HARMONIZER_DEMO` database with three schemas (`RAW`, `HARMONIZED`, `ANALYTICS`) and loads ~500 standard items and ~10,000 raw items.
 
 ### Run the Pipeline
 
@@ -140,7 +140,7 @@ The pipeline runs via a **Snowflake Task DAG** that processes items automaticall
 # Enable Task DAG and trigger immediate execution
 uv run demo data run
 
-# Enable tasks only (waits for 3-minute schedule)
+# Enable tasks only (waits for 1-minute schedule)
 uv run demo data run --no-trigger
 
 # Stop pipeline (disable tasks)
@@ -155,7 +155,7 @@ The Task DAG provides:
 - **Dedup-first**: 651 unique descriptions processed instead of 9,960 raw items (15x reduction)
 - **Stream-based processing**: Exactly-once semantics via `RAW_ITEMS_STREAM`
 - **Classification step**: `AI_CLASSIFY` category + subcategory before matching
-- **Automatic scheduling**: Runs every 3 minutes when enabled
+- **Automatic scheduling**: Runs every 1 minute when enabled
 - **Disconnection-resilient**: Continues even if CLI disconnects
 
 Check task status:
@@ -212,7 +212,6 @@ HARMONIZER_DEMO Database
     ├── CONFIG            Runtime configuration (weights, thresholds, models)
     ├── PIPELINE_RUNS           Run history and status
     ├── ACCURACY_TEST_JOBS      Accuracy test job tracking
-    ├── CLASSIFICATION_JOBS     Classification job tracking
     ├── COST_TRACKING           Per-run cost metrics
     ├── V_COST_COMPARISON       Weekly cost trends view
     └── V_PIPELINE_HEALTH       Operational status view
@@ -226,7 +225,6 @@ Long-running operations use a consistent job tracking pattern:
 | Job Type | Table | Key Procedures |
 |----------|-------|----------------|
 | Accuracy Testing | `ACCURACY_TEST_JOBS` | `START_ACCURACY_TEST_JOB`, `UPDATE_ACCURACY_TEST_PROGRESS` |
-| Classification | `CLASSIFICATION_JOBS` | `START_CLASSIFICATION_JOB`, `UPDATE_CLASSIFICATION_PROGRESS` |
 
 ### Cortex AI Functions
 
@@ -245,7 +243,7 @@ Long-running operations use a consistent job tracking pattern:
 The pipeline runs as a **10-task Snowflake Task DAG** with TRUE parallel matching and a **decoupled ensemble**:
 
 ```
-DEDUP_FASTPATH_TASK (root, scheduled every 3 min)
+DEDUP_FASTPATH_TASK (root, scheduled every 1 minute)
   └─> CLASSIFY_UNIQUE_TASK    ← AI_CLASSIFY category + subcategory
         └─> VECTOR_PREP_TASK  ← embeddings + ITEM_MATCHES stubs
               ├─> CORTEX_SEARCH_TASK  (parallel)
@@ -485,7 +483,7 @@ For production deployments, use Snowflake Tasks instead of the CLI. The parallel
 
 | Task | Predecessor | Description |
 |------|-------------|-------------|
-| `DEDUP_FASTPATH_TASK` | Root (every 3 min) | Dedup raw items → UNIQUE_DESCRIPTIONS + fast-path resolution |
+| `DEDUP_FASTPATH_TASK` | Root (every 1 minute) | Dedup raw items → UNIQUE_DESCRIPTIONS + fast-path resolution |
 | `CLASSIFY_UNIQUE_TASK` | DEDUP (when != skipped) | AI_CLASSIFY category + subcategory at unique-description level |
 | `VECTOR_PREP_TASK` | CLASSIFY (when != error) | Consume stream, generate embeddings, create ITEM_MATCHES stubs |
 | `CORTEX_SEARCH_TASK` | VECTOR_PREP | Cortex Search matching → CORTEX_SEARCH_STAGING |
@@ -517,8 +515,8 @@ CALL HARMONIZED.GET_PIPELINE_STATUS();
 SELECT * FROM ANALYTICS.V_TASK_EXECUTION_HISTORY;
 
 -- Refresh and view current task states
-CALL HARMONIZED.REFRESH_PIPELINE_TASK_STATUS();
-SELECT * FROM HARMONIZED.V_PIPELINE_TASK_STATUS;
+CALL ANALYTICS.REFRESH_TASK_STATE_CACHE_PROC();
+SELECT * FROM ANALYTICS.V_TASK_STATE_CACHE;
 ```
 
 ### Parallel Task DAG Architecture
@@ -529,7 +527,7 @@ The parallel Task DAG runs **method-level matching concurrently** using Snowflak
 RAW_ITEMS_STREAM (exactly-once processing)
     │
     ▼
-DEDUP_FASTPATH_TASK (root, runs on 3-min schedule)
+DEDUP_FASTPATH_TASK (root, runs on 1-minute schedule)
     │   ─ Deduplicates raw items (96x cost reduction)
     │   ─ Resolves fast-path matches (zero AI cost)
     │
@@ -567,7 +565,7 @@ _TASK             (WHEN)
 **Key Features:**
 - **Stream-based**: `RAW_ITEMS_STREAM` provides exactly-once processing semantics
 - **Safe batching**: Stream items staged first to `STREAM_STAGING` to prevent data loss with LIMIT
-- **Scheduled execution**: Task runs every 3 minutes; procedure handles empty states gracefully
+- **Scheduled execution**: Task runs every 1 minute; procedure handles empty states gracefully
 - **No table locking**: Each method writes to its own TRANSIENT staging table
 - **Self-healing**: WHEN clauses enable tasks to self-trigger when work is available
 - **No orphan states**: Each item has a clear next step at all times
@@ -916,7 +914,6 @@ Run `uv run demo db up` to execute all scripts in the correct order.
 | `MATCH_COSINE_BATCH` | HARMONIZED | Cosine similarity to staging (parallel) |
 | `MATCH_EDIT_BATCH` | HARMONIZED | Edit distance to staging (parallel) |
 | `COMPUTE_ENSEMBLE_SCORES_ONLY` | HARMONIZED | 4-method ensemble scoring |
-| `COMPUTE_ENSEMBLE_WITH_NOTIFICATION` | HARMONIZED | Ensemble + notification (Task DAG finalizer) |
 | `ENABLE_PARALLEL_PIPELINE_TASKS` | HARMONIZED | Enable Task DAG (correct dependency order) |
 | `DISABLE_PARALLEL_PIPELINE_TASKS` | HARMONIZED | Disable Task DAG |
 | `GET_PIPELINE_STATUS` | HARMONIZED | Current pipeline status for CLI/UI |
@@ -926,12 +923,9 @@ Run `uv run demo db up` to execute all scripts in the correct order.
 | `RELEASE_LOCK` | HARMONIZED | Release review lock |
 | `SUBMIT_REVIEW` | HARMONIZED | Process confirm/reject/feedback |
 | `RESET_PIPELINE` | HARMONIZED | Truncate match results |
-| `GET_PIPELINE_STATS` | ANALYTICS | Dashboard statistics |
 | `LOG_PIPELINE_STEP` | ANALYTICS | Log step execution metrics |
 | `RUN_ACCURACY_TESTS` | ANALYTICS | Run accuracy tests against ground truth |
-| `MATCH_ITEMS_STREAM` | HARMONIZED | Stream-based single-pass matching |
 | `FORCE_REEVALUATE_SCORES` | HARMONIZED | Force re-score existing matches |
-| `RECOVER_ORPHANED_ITEMS` | HARMONIZED | Recovery for stuck items |
 
 
 

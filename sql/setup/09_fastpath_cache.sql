@@ -364,3 +364,9 @@ EXCEPTION
         RAISE;
 END;
 $$;
+
+
+SELECT '09_fastpath_cache setup complete!' AS status;
+
+
+SELECT '09_fastpath_cache setup complete!' AS status;

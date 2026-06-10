@@ -206,181 +206,10 @@ class TestPipelineTasks:
 
 
 # ---------------------------------------------------------------------------
-# backend/services/review.py Tests (83% → 95%+)
-# Missing: line 369 (order_map fallback), 551-552, 595-625 (submit_review fallback)
-# ---------------------------------------------------------------------------
-
-
-class TestReviewServiceCoverage:
-    """Tests for ReviewService coverage gaps."""
-
-    def test_build_order_clause_unknown_sort_key_uses_default(self) -> None:
-        """Test _build_order_clause with unknown sort key hits default."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        # Use unknown sort_col and unknown sort dropdown value
-        order = service._build_order_clause("unknown_col", "asc", "unknown_sort")
-
-        # Should fall back to default (confidence_asc)
-        assert "ENSEMBLE_SCORE ASC" in order
-
-    def test_build_order_clause_unknown_sort_key_with_cte(self) -> None:
-        """Test _build_order_clause with unknown sort key in CTE mode."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        # Use unknown sort_col and unknown sort dropdown value with CTE
-        order = service._build_order_clause("unknown_col", "asc", "unknown_sort", use_cte=True)
-
-        # Should fall back to default (confidence_asc) in CTE format
-        assert "ENSEMBLE_SCORE ASC" in order
-        assert "im." not in order  # CTE version has no table alias
-
-    @pytest.mark.asyncio
-    async def test_submit_review_fallback_sql_path(self) -> None:
-        """Test submit_review fallback SQL path when stored procedure fails."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        # First call (SP) fails, subsequent calls for fallback succeed
-        mock_sf.query = AsyncMock(side_effect=Exception("SP not found"))
-        mock_sf.execute = AsyncMock(return_value="OK")
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.submit_review(
-            item_id="item-123",
-            matched_id="std-456",
-            match_id="match-789",
-            action="CONFIRMED",
-        )
-
-        assert result.success is True
-        assert result.used_fallback is True
-        # Verify fallback SQL was executed
-        assert mock_sf.execute.call_count >= 1
-
-    @pytest.mark.asyncio
-    async def test_submit_review_fallback_with_empty_match_id(self) -> None:
-        """Test submit_review fallback path when match_id is empty."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        mock_sf.execute = AsyncMock(return_value="OK")
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.submit_review(
-            item_id="item-123",
-            matched_id="std-456",
-            match_id="",  # Empty triggers fallback
-            action="REJECTED",
-        )
-
-        assert result.success is True
-        assert result.used_fallback is True
-
-    @pytest.mark.asyncio
-    async def test_submit_review_sp_returns_json_with_propagated(self) -> None:
-        """Test submit_review correctly parses JSON response with propagated items."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        # SP returns JSON string
-        mock_sf.query = AsyncMock(return_value=[{"SUBMIT_REVIEW": '{"propagated_items": 3}'}])
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.submit_review(
-            item_id="item-123",
-            matched_id="std-456",
-            match_id="match-789",
-            action="CONFIRMED",
-        )
-
-        assert result.success is True
-        assert result.propagated == 3
-        assert result.used_fallback is False
-
-    @pytest.mark.asyncio
-    async def test_bulk_submit_review_empty_items(self) -> None:
-        """Test bulk_submit_review returns error for empty items list."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.bulk_submit_review([])
-
-        assert result["status"] == "error"
-        assert "No items provided" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_bulk_submit_review_success_with_json_string(self) -> None:
-        """Test bulk_submit_review parses JSON string response."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        mock_sf.query = AsyncMock(return_value=[{"BULK_SUBMIT_REVIEW": '{"success_count": 5}'}])
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.bulk_submit_review([{"match_id": "m1", "action": "CONFIRMED"}])
-
-        assert result["success_count"] == 5
-
-    @pytest.mark.asyncio
-    async def test_bulk_submit_review_success_with_dict_response(self) -> None:
-        """Test bulk_submit_review handles dict response directly."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        mock_sf.query = AsyncMock(return_value=[{"BULK_SUBMIT_REVIEW": {"success_count": 3}}])
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.bulk_submit_review([{"match_id": "m1", "action": "REJECTED"}])
-
-        assert result["success_count"] == 3
-
-    @pytest.mark.asyncio
-    async def test_bulk_submit_review_empty_result(self) -> None:
-        """Test bulk_submit_review returns success for empty SP result."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        mock_sf.query = AsyncMock(return_value=[])
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.bulk_submit_review([{"match_id": "m1", "action": "CONFIRMED"}])
-
-        assert result["status"] == "success"
-
-    @pytest.mark.asyncio
-    async def test_bulk_submit_review_exception(self) -> None:
-        """Test bulk_submit_review handles exceptions gracefully."""
-        from backend.services.review import ReviewService
-
-        mock_sf = AsyncMock()
-        mock_sf.query = AsyncMock(side_effect=Exception("Database error"))
-
-        service = ReviewService(db_name="TEST_DB", sf=mock_sf)
-
-        result = await service.bulk_submit_review([{"match_id": "m1", "action": "CONFIRMED"}])
-
-        assert result["status"] == "error"
-        assert "Database error" in result["message"]
-
-
-# ---------------------------------------------------------------------------
 # backend/api/routes/matches/bulk.py Tests (86% → 95%+)
 # Missing: lines 71, 92, 97, 100-102
+# ---------------------------------------------------------------------------
+# backend/api/routes/matches/bulk.py Tests (86% → 95%+)
 # ---------------------------------------------------------------------------
 
 
@@ -752,29 +581,6 @@ class TestDashboardServiceCacheBranches:
         assert "kpi" in result
 
     @pytest.mark.asyncio
-    async def test_get_confidence_data_sets_cache(self) -> None:
-        """Test get_confidence_data calls cache.set when cache provided."""
-        from backend.services.dashboard import DashboardService
-
-        mock_sf = AsyncMock()
-        mock_sf.query = AsyncMock(
-            side_effect=[
-                [{"BUCKET": "0.9-1.0", "COUNT": 100}],  # best
-                [{"BUCKET": "0.8-0.9", "COUNT": 50}],  # ensemble
-            ]
-        )
-
-        mock_cache = MagicMock()
-        mock_cache.get = MagicMock(return_value=None)
-        mock_cache.set = MagicMock()
-
-        service = DashboardService(db_name="TEST_DB", sf=mock_sf, cache=mock_cache)
-
-        await service.get_confidence_data()
-
-        # Verify cache.set was called for both keys
-        assert mock_cache.set.call_count == 2
-
     @pytest.mark.asyncio
     async def test_get_cost_data_sets_cache(self) -> None:
         """Test get_cost_data calls cache.set."""
@@ -847,32 +653,6 @@ class TestDepsCoverage:
 
         # Should return a set
         assert isinstance(result, set)
-
-    def test_get_review_service_factory(self) -> None:
-        """Test get_review_service factory function."""
-        from backend.api.deps import get_review_service
-        from backend.services.review import ReviewService
-
-        mock_sf = MagicMock()
-        mock_cache = MagicMock()
-
-        service = get_review_service("TEST_DB", mock_sf, mock_cache)
-
-        assert isinstance(service, ReviewService)
-        assert service.db_name == "TEST_DB"
-
-    def test_get_settings_service_factory(self) -> None:
-        """Test get_settings_service factory function."""
-        from backend.api.deps import get_settings_service
-        from backend.services.settings import SettingsService
-
-        mock_sf = MagicMock()
-        mock_cache = MagicMock()
-
-        service = get_settings_service("TEST_DB", mock_sf, mock_cache)
-
-        assert isinstance(service, SettingsService)
-        assert service.db_name == "TEST_DB"
 
 
 # ---------------------------------------------------------------------------

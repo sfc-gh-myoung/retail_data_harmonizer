@@ -268,8 +268,3 @@ AS
 
 -- Enable cleanup task by default
 ALTER TASK HARMONIZER_DEMO.HARMONIZED.CLEANUP_COORDINATION_TASK RESUME;
-
--- ============================================================================
--- Grant permissions
--- ============================================================================
-GRANT SELECT ON HARMONIZER_DEMO.HARMONIZED.TASK_COORDINATION TO ROLE HARMONIZER_DEMO_ROLE;

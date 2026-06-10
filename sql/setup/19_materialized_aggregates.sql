@@ -1,10 +1,13 @@
 -- ============================================================================
 -- sql/setup/19_materialized_aggregates.sql
 -- Dynamic Tables for Dashboard Performance Optimization
--- 
--- Created: 2026-03-21
--- Purpose: Replace performance-critical views with Dynamic Tables
--- See: plans/dynamic-tables-clean-migration.plan.md
+--
+-- Creates:
+--   1. DT_DASHBOARD_KPIS (incremental Dynamic Table, 1-min target lag)
+--   2. DT_DASHBOARD_CONFIDENCE_BEST (incremental Dynamic Table, 2-min target lag)
+--   3. DT_DASHBOARD_CONFIDENCE_ENSEMBLE (incremental Dynamic Table, 2-min target lag)
+--
+-- Prerequisites: 02_schema_and_tables.sql, 11_matching/, 12_parallel_matchers.sql
 -- ============================================================================
 
 USE ROLE HARMONIZER_DEMO_ROLE;

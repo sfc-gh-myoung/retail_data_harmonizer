@@ -40,7 +40,7 @@ This document provides a comprehensive technical overview of the Retail Data Har
 
 ```
 base_score = (0.55 × cortex_search) + (0.25 × cosine) + (0.12 × edit) + (0.18 × jaccard)
-ensemble_score = LEAST(1.0, base_score × agreement_multiplier - subcategory_penalty)
+ensemble_score = LEAST(1.0, base_score × agreement_multiplier)
 ```
 
 **Agreement Multipliers:** 4-way = 1.20×, 3-way = 1.15×, 2-way = 1.10×
@@ -63,7 +63,7 @@ ensemble_score = LEAST(1.0, base_score × agreement_multiplier - subcategory_pen
 | Edit Match | ~3s | Set-based SQL (parallel) |
 | Jaccard Match | ~3s | Set-based SQL (parallel) |
 | Ensemble | ~20s | 4-method weighted scoring |
-| **Total** | **~3 min** | Target: <5 min per batch |
+| **Total** | **~1 min** | Target: <5 min per batch |
 
 ### Cost Optimizations
 
@@ -948,7 +948,7 @@ normalized_weights = (W_search/weight_sum, W_cosine/weight_sum, W_edit/weight_su
 base_score = (search × norm_W_search) + (cosine × norm_W_cosine) + (edit × norm_W_edit) + (jaccard × norm_W_jaccard)
 
 -- Final ensemble score with agreement bonus and subcategory penalty
-ensemble_score = LEAST(1.0, base_score × agreement_multiplier - subcategory_penalty)
+ensemble_score = LEAST(1.0, base_score × agreement_multiplier)
 ```
 
 Default weights (stored in `CONFIG`, dynamically normalized):
@@ -1427,19 +1427,18 @@ The system provides wrapper procedures for enabling/disabling the Task DAG rathe
 
 | Procedure | Purpose |
 |-----------|---------|
-| `ENABLE_PARALLEL_PIPELINE_TASKS()` | Resume all 11 decoupled pipeline tasks in correct order |
-| `DISABLE_PARALLEL_PIPELINE_TASKS()` | Suspend all 11 decoupled pipeline tasks in correct order |
-| `GET_PIPELINE_TASK_STATUS()` | Return JSON status of all pipeline tasks |
+| `ENABLE_PARALLEL_PIPELINE_TASKS()` | Resume all 10 decoupled pipeline tasks in correct order |
+| `DISABLE_PARALLEL_PIPELINE_TASKS()` | Suspend all 10 decoupled pipeline tasks in correct order |
 
 **Why use these instead of direct `ALTER TASK`?**
 
 1. **Dependency Ordering**: Snowflake requires tasks to be enabled/disabled in a specific order:
-   - **Enable**: leaf tasks first, root task last (VECTOR_ENSEMBLE → siblings → CLASSIFY_UNIQUE → DEDUP_FASTPATH)
-   - **Disable**: root task first, leaf tasks last (DEDUP_FASTPATH → CLASSIFY_UNIQUE → siblings → VECTOR_ENSEMBLE)
+   - **Enable**: leaf tasks first, root task last (STAGING_MERGE → siblings → CLASSIFY_UNIQUE → DEDUP_FASTPATH)
+   - **Disable**: root task first, leaf tasks last (DEDUP_FASTPATH → CLASSIFY_UNIQUE → siblings → STAGING_MERGE)
    
    If you enable the root task before its children, Snowflake throws an error. The procedures encode this logic.
 
-2. **Atomic Operations**: One procedure call handles all 15 tasks instead of 15 separate `ALTER TASK` statements.
+2. **Atomic Operations**: One procedure call handles all 10 tasks instead of 10 separate `ALTER TASK` statements.
 
 3. **Error Handling**: Procedures catch exceptions and return structured JSON errors instead of raw SQL failures.
 

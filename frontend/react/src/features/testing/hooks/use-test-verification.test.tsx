@@ -6,7 +6,6 @@ import {
   useTestingDashboard,
   useFailures,
   useRunAccuracyTests,
-  useTestStatus,
   useTestRunner,
 } from './use-test-verification'
 
@@ -289,63 +288,6 @@ describe('useRunAccuracyTests', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
 
     expect(result.current.error).toBeTruthy()
-  })
-})
-
-describe('useTestStatus', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('fetches status for given runId', async () => {
-    vi.mocked(fetchApi).mockResolvedValueOnce({
-      status: 'running',
-      runningCount: 3,
-    })
-
-    const { result } = renderHook(() => useTestStatus('run-123'), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(fetchApi).toHaveBeenCalledWith('/v2/testing/status/run-123', expect.any(Object, expect.any(Object)))
-  })
-
-  it('returns status data on success', async () => {
-    vi.mocked(fetchApi).mockResolvedValueOnce({
-      status: 'running',
-      runningCount: 2,
-    })
-
-    const { result } = renderHook(() => useTestStatus('run-123'), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(result.current.data?.status).toBe('running')
-    expect(result.current.data?.runningCount).toBe(2)
-  })
-
-  it('does not fetch when runId is null', () => {
-    const { result } = renderHook(() => useTestStatus(null), {
-      wrapper: createWrapper(),
-    })
-
-    expect(result.current.isLoading).toBe(false)
-    expect(result.current.isFetching).toBe(false)
-    expect(fetchApi).not.toHaveBeenCalled()
-  })
-
-  it('does not fetch when enabled is false', () => {
-    const { result } = renderHook(() => useTestStatus('run-123', false), {
-      wrapper: createWrapper(),
-    })
-
-    expect(result.current.isLoading).toBe(false)
-    expect(result.current.isFetching).toBe(false)
-    expect(fetchApi).not.toHaveBeenCalled()
   })
 })
 

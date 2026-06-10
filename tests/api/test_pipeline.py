@@ -281,28 +281,6 @@ class TestPipelineActions:
         assert resp.status_code == 500
         assert "Reset failed" in resp.json()["detail"]
 
-    @patch("backend.api.sf.query", new_callable=AsyncMock)
-    def test_pipeline_status(self, mock_query) -> None:
-        """Test GET /status returns pipeline status."""
-        mock_query.side_effect = [
-            [{"tasks_enabled": True, "root_task_state": "started", "pending_items": 10}],
-            [{"CNT": 5}],
-        ]
-        resp = client.get("/api/v2/pipeline/status")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "tasksEnabled" in data or "error" in data
-
-    @patch("backend.api.sf.query", new_callable=AsyncMock)
-    def test_pipeline_status_error_returns_error_dict(self, mock_query) -> None:
-        """Test GET /status returns error dict on exception."""
-        mock_query.side_effect = Exception("Query failed")
-        resp = client.get("/api/v2/pipeline/status")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "error" in data
-
-
 @pytest.mark.unit
 class TestPipelineFunnelErrors:
     """Test error handling for pipeline funnel endpoint."""

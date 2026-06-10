@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AlternativesModal } from './alternatives-modal'
 
 vi.mock('../hooks/use-matches', () => ({
   useAlternatives: vi.fn(),
-  useSelectAlternative: vi.fn(),
 }))
 
-import { useAlternatives, useSelectAlternative } from '../hooks/use-matches'
+import { useAlternatives } from '../hooks/use-matches'
+
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -49,15 +49,10 @@ const mockAlternatives = [
 ]
 
 describe('AlternativesModal', () => {
-  const mockMutate = vi.fn()
   const mockOnClose = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useSelectAlternative).mockReturnValue({
-      mutate: mockMutate,
-      isPending: false,
-    } as any)
   })
 
   it('renders loading state with skeletons', () => {
@@ -70,7 +65,6 @@ describe('AlternativesModal', () => {
     const { container } = renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -97,7 +91,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -117,7 +110,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -136,7 +128,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -158,7 +149,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item Description"
         onClose={mockOnClose}
       />
@@ -178,7 +168,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -188,61 +177,6 @@ describe('AlternativesModal', () => {
     const closeButtons = screen.getAllByRole('button', { name: /close/i })
     fireEvent.click(closeButtons[0])
     expect(mockOnClose).toHaveBeenCalled()
-  })
-
-  it('calls selectAlternative.mutate when Select button clicked', async () => {
-    vi.mocked(useAlternatives).mockReturnValue({
-      data: { alternatives: mockAlternatives },
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(
-      <AlternativesModal
-        itemId="item-1"
-        matchId="match-1"
-        rawDescription="Test Item"
-        onClose={mockOnClose}
-      />
-    )
-
-    const selectButtons = screen.getAllByRole('button', { name: /select/i })
-    fireEvent.click(selectButtons[0])
-
-    expect(mockMutate).toHaveBeenCalledWith(
-      {
-        itemId: 'item-1',
-        matchId: 'match-1',
-        standardId: 'STD-001',
-      },
-      expect.any(Object)
-    )
-  })
-
-  it('disables select buttons when mutation is pending', () => {
-    vi.mocked(useAlternatives).mockReturnValue({
-      data: { alternatives: mockAlternatives },
-      isLoading: false,
-      error: null,
-    } as any)
-    vi.mocked(useSelectAlternative).mockReturnValue({
-      mutate: mockMutate,
-      isPending: true,
-    } as any)
-
-    renderWithProviders(
-      <AlternativesModal
-        itemId="item-1"
-        matchId="match-1"
-        rawDescription="Test Item"
-        onClose={mockOnClose}
-      />
-    )
-
-    const selectButtons = screen.getAllByRole('button', { name: /select/i })
-    selectButtons.forEach(button => {
-      expect(button).toBeDisabled()
-    })
   })
 
   it('does not render dialog when itemId is null', () => {
@@ -255,7 +189,6 @@ describe('AlternativesModal', () => {
     const { container } = renderWithProviders(
       <AlternativesModal
         itemId={null}
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -264,37 +197,6 @@ describe('AlternativesModal', () => {
     expect(container.querySelector('[role="dialog"]')).not.toBeInTheDocument()
   })
 
-  it('shows selecting state on clicked button', async () => {
-    vi.mocked(useAlternatives).mockReturnValue({
-      data: { alternatives: mockAlternatives },
-      isLoading: false,
-      error: null,
-    } as any)
-    
-    // Simulate pending state after clicking
-    let isPending = false
-    mockMutate.mockImplementation(() => {
-      isPending = true
-    })
-    vi.mocked(useSelectAlternative).mockImplementation(() => ({
-      mutate: mockMutate,
-      isPending,
-    } as any))
-
-    renderWithProviders(
-      <AlternativesModal
-        itemId="item-1"
-        matchId="match-1"
-        rawDescription="Test Item"
-        onClose={mockOnClose}
-      />
-    )
-
-    const selectButtons = screen.getAllByRole('button', { name: /select/i })
-    fireEvent.click(selectButtons[0])
-
-    expect(mockMutate).toHaveBeenCalled()
-  })
 
   it('renders method column for each alternative', () => {
     vi.mocked(useAlternatives).mockReturnValue({
@@ -306,7 +208,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -326,7 +227,6 @@ describe('AlternativesModal', () => {
     renderWithProviders(
       <AlternativesModal
         itemId="item-1"
-        matchId="match-1"
         rawDescription="Test Item"
         onClose={mockOnClose}
       />
@@ -337,104 +237,4 @@ describe('AlternativesModal', () => {
     expect(screen.getByText('Score')).toBeInTheDocument()
   })
 
-  describe('mutation callbacks', () => {
-    it('calls onClose when selection mutation succeeds', async () => {
-      vi.mocked(useAlternatives).mockReturnValue({
-        data: { alternatives: mockAlternatives },
-        isLoading: false,
-        error: null,
-      } as any)
-      
-      // Mock mutate to immediately call onSuccess
-      mockMutate.mockImplementation((_data, options) => {
-        options?.onSuccess?.()
-      })
-
-      renderWithProviders(
-        <AlternativesModal
-          itemId="item-1"
-          matchId="match-1"
-          rawDescription="Test Item"
-          onClose={mockOnClose}
-        />
-      )
-
-      const selectButtons = screen.getAllByRole('button', { name: /select/i })
-      fireEvent.click(selectButtons[0])
-
-      await waitFor(() => {
-        expect(mockOnClose).toHaveBeenCalled()
-      })
-    })
-
-    it('resets selection state when mutation fails', async () => {
-      vi.mocked(useAlternatives).mockReturnValue({
-        data: { alternatives: mockAlternatives },
-        isLoading: false,
-        error: null,
-      } as any)
-      
-      // Mock mutate to call onError after a brief delay
-      mockMutate.mockImplementation((_data, options) => {
-        options?.onError?.()
-      })
-
-      renderWithProviders(
-        <AlternativesModal
-          itemId="item-1"
-          matchId="match-1"
-          rawDescription="Test Item"
-          onClose={mockOnClose}
-        />
-      )
-
-      const selectButtons = screen.getAllByRole('button', { name: /select/i })
-      fireEvent.click(selectButtons[0])
-
-      // After error, the button should still show "Select" (not "Selecting...")
-      // because selectedId was reset to null
-      await waitFor(() => {
-        expect(mockMutate).toHaveBeenCalled()
-      })
-      
-      // onClose should NOT have been called on error
-      expect(mockOnClose).not.toHaveBeenCalled()
-    })
-
-    it('calls onClose when dialog onOpenChange triggers close', () => {
-      vi.mocked(useAlternatives).mockReturnValue({
-        data: { alternatives: mockAlternatives },
-        isLoading: false,
-        error: null,
-      } as any)
-
-      renderWithProviders(
-        <AlternativesModal
-          itemId="item-1"
-          matchId="match-1"
-          rawDescription="Test Item"
-          onClose={mockOnClose}
-        />
-      )
-
-      // The dialog has an X button that triggers onOpenChange
-      // Find the dialog close button (the X in the corner, not the "Close" button at bottom)
-      const dialogCloseButtons = screen.getAllByRole('button')
-      // The first close-related button should be the dialog's built-in close
-      const dialogClose = dialogCloseButtons.find(btn => 
-        btn.querySelector('svg[class*="x"]') || 
-        btn.getAttribute('aria-label')?.toLowerCase().includes('close')
-      )
-      
-      if (dialogClose) {
-        fireEvent.click(dialogClose)
-        expect(mockOnClose).toHaveBeenCalled()
-      } else {
-        // Fallback: test the Close button at the bottom
-        const closeButton = screen.getByRole('button', { name: /close/i })
-        fireEvent.click(closeButton)
-        expect(mockOnClose).toHaveBeenCalled()
-      }
-    })
-  })
 })

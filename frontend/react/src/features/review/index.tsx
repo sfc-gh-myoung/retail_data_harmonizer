@@ -18,9 +18,6 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  SkipForward,
-  ThumbsUp,
-  ThumbsDown,
   Search,
   ChevronRight,
 } from 'lucide-react'
@@ -50,8 +47,6 @@ import {
   useBulkAction,
   useUpdateMatch,
   useFilterOptions,
-  useSkipMatch,
-  useFeedback,
   type MatchFilters,
   type Match,
 } from './hooks/use-matches'
@@ -359,8 +354,6 @@ interface ExpandedRowDetailProps {
   match: Match
   colSpan: number
   onUpdateStatus: (match: Match, status: string) => void
-  onSkip: (itemId: string, matchId: string) => void
-  onFeedback: (matchId: string, itemId: string, type: 'up' | 'down') => void
   onShowAlternatives: (match: Match) => void
   isUpdating: boolean
 }
@@ -369,8 +362,6 @@ function ExpandedRowDetail({
   match,
   colSpan,
   onUpdateStatus,
-  onSkip,
-  onFeedback,
   onShowAlternatives,
   isUpdating,
 }: ExpandedRowDetailProps) {
@@ -449,41 +440,11 @@ function ExpandedRowDetail({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onSkip(match.itemId, match.matchId)}
+                onClick={() => onShowAlternatives(match)}
               >
-                <SkipForward className="h-4 w-4 mr-1" /> Skip
+                <Search className="h-4 w-4 mr-1" /> Show Alternatives
               </Button>
             )}
-
-            <div className="border-l pl-3 ml-auto flex items-center gap-1">
-              <span className="text-xs text-muted-foreground mr-1">Feedback:</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                onClick={() => onFeedback(match.matchId, match.itemId, 'up')}
-                title="Thumbs up"
-              >
-                <ThumbsUp className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                onClick={() => onFeedback(match.matchId, match.itemId, 'down')}
-                title="Thumbs down"
-              >
-                <ThumbsDown className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onShowAlternatives(match)}
-            >
-              <Search className="h-4 w-4 mr-1" /> Show Alternatives
-            </Button>
           </div>
         </div>
       </TableCell>
@@ -559,8 +520,6 @@ export function Review() {
   const { data: filterOptions } = useFilterOptions()
   const bulkAction = useBulkAction()
   const updateMatch = useUpdateMatch()
-  const skipMatch = useSkipMatch()
-  const feedback = useFeedback()
 
   const isGroupingActive = filters.groupBy !== undefined &&
     filters.groupBy !== 'none' &&
@@ -675,17 +634,6 @@ export function Review() {
       })
     },
     [updateMatch, filters.groupBy]
-  )
-
-  const handleSkip = useCallback(
-    (itemId: string, matchId: string) => skipMatch.mutate({ itemId, matchId }),
-    [skipMatch]
-  )
-
-  const handleFeedback = useCallback(
-    (matchId: string, itemId: string, type: 'up' | 'down') =>
-      feedback.mutate({ matchId, itemId, feedback: type }),
-    [feedback]
   )
 
   // Column definitions
@@ -951,8 +899,6 @@ export function Review() {
                                       match={match}
                                       colSpan={colCount}
                                       onUpdateStatus={handleUpdateStatus}
-                                      onSkip={handleSkip}
-                                      onFeedback={handleFeedback}
                                       onShowAlternatives={setAlternativesFor}
                                       isUpdating={updateMatch.isPending}
                                     />
@@ -1017,8 +963,6 @@ export function Review() {
                             match={row.original}
                             colSpan={colCount}
                             onUpdateStatus={handleUpdateStatus}
-                            onSkip={handleSkip}
-                            onFeedback={handleFeedback}
                             onShowAlternatives={setAlternativesFor}
                             isUpdating={updateMatch.isPending}
                           />
@@ -1049,7 +993,6 @@ export function Review() {
       {/* Alternatives Modal */}
       <AlternativesModal
         itemId={alternativesFor?.itemId ?? null}
-        matchId={alternativesFor?.matchId ?? ''}
         rawDescription={alternativesFor?.rawName ?? ''}
         onClose={() => setAlternativesFor(null)}
       />

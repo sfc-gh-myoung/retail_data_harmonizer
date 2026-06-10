@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- feat(api): `POST /api/v2/settings` endpoint to persist weights, thresholds, performance, and automation settings to `ANALYTICS.CONFIG` via bulk VARIANT upsert
+- feat(web): editable Settings page with persistent save bar, dirty-state detection, and toast success/error feedback on save
+- feat(web): dual-handle range slider on the Thresholds card, replacing four independent threshold sliders with a single reject/accept boundary control
+- feat(sql): three-band routing in `ROUTE_MATCHED_ITEMS` — configurable auto-reject band (gated by `AUTO_REJECT_ENABLED`, logged as `LOW_CONFIDENCE_AUTO`) alongside existing auto-accept and review bands
+- feat(sql): seed `AUTO_REJECT_THRESHOLD`, `AUTO_ACCEPT_ENABLED`, `AUTO_REJECT_ENABLED`, `MIN_AGREEMENT_LEVEL`, and `CACHE_ENABLED` keys in `ANALYTICS.CONFIG`; default `AUTO_ACCEPT_THRESHOLD` lowered from 0.80 to 0.75
+- feat(make): `make resume` and `make suspend` targets to start or stop the warehouse, pipeline tasks, and all dynamic tables in a single command
+- test(api): `POST /api/v2/settings` test suite covering valid payload, threshold ordering validation, and error propagation
+
+### Changed
+
+- refactor(sql): `UPDATE_CONFIG` procedure signature changed from single-key `(KEY_NAME VARCHAR, KEY_VALUE VARCHAR)` to bulk-VARIANT `(P_SETTINGS VARIANT)` with MERGE-based upsert; old single-key overload dropped
+- refactor(api): threshold fields normalized to fractional range `0.0–1.0` (correcting prior `0–100` schema); review band derived as `[reject, autoAccept)` from two editable boundaries; `AGENTIC_ENABLED` config key renamed to `AUTO_ACCEPT_ENABLED`
+- refactor(api): settings route logic inlined into route handlers — `SettingsService` removed, replaced by `_load_config` and `_build_response` helpers
+- refactor(web): `useSaveSettings` hook replaces `useUpdateSettings`, `useResetSettings`, and `useReEvaluate`; writes now use `POST /v2/settings` instead of `PATCH`
+- refactor(web): `Slider` component extended to support multiple thumbs by rendering one `Thumb` per value element
+- refactor(web): Settings page performance and automation inputs (batch size, parallelism, cache toggle) are now editable
+
+### Removed
+
+- refactor(sql): deleted `11d_stream_handlers.sql` (`MATCH_ITEMS_STREAM` single-pass alternative to Task DAG), `12_parallel_matchers.sql` (parallel staging matchers), legacy function overloads in `11b_matcher_functions.sql` (`COUNT_SIGNAL_AGREEMENT` and others), and the `COMPUTE_ENSEMBLE_WITH_NOTIFICATION` backward-compatibility wrapper; the Task DAG is now the sole pipeline path
+- refactor(api): removed `services/review.py`, `services/pipeline.py`, `services/settings.py`, and `services/dashboard.py`; route handlers no longer delegate to a dedicated service layer
+- refactor(api): removed legacy aggregated `GET /comparison` endpoint; individual sub-endpoints (`/agreement`, `/source-performance`, `/method-accuracy`) remain
+- refactor(web): removed `useSkipMatch`, `useFeedback`, and `useSelectAlternative` hooks (legacy `postFormApi` form-submission mutations)
+- refactor(test): deleted `tests/test_services.py` and reduced legacy coverage tests consistent with service-layer and hook removals
+
 ## [1.2.0] - 2026-05-01
 
 ### Added

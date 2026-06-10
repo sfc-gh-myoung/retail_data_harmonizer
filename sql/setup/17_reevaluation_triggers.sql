@@ -24,7 +24,6 @@ USE WAREHOUSE HARMONIZER_DEMO_WH;
 --   THUMBS_DOWN         - Flag auto-accepted items with negative feedback
 --   PERIODIC_AUDIT      - Flag oldest N auto-accepted for spot-check
 -- ============================================================================
-DROP PROCEDURE IF EXISTS HARMONIZER_DEMO.HARMONIZED.TRIGGER_REEVALUATION(VARCHAR);
 CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.TRIGGER_REEVALUATION(
     P_CRITERIA VARCHAR,
     P_RUN_ID VARCHAR DEFAULT NULL
@@ -174,7 +173,6 @@ $$;
 -- BULK_RECONFIRM: Restore re-evaluated items back to accepted state
 -- Used when reviewer confirms original match is still correct
 -- ============================================================================
-DROP PROCEDURE IF EXISTS HARMONIZER_DEMO.HARMONIZED.BULK_RECONFIRM(ARRAY);
 CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.BULK_RECONFIRM(
     P_MATCH_IDS ARRAY,
     P_RUN_ID VARCHAR DEFAULT NULL
@@ -240,7 +238,6 @@ $$;
 -- BULK_REEVALUATE: Trigger re-evaluation in batches for large datasets
 -- Wraps TRIGGER_REEVALUATION with batch size control
 -- ============================================================================
-DROP PROCEDURE IF EXISTS HARMONIZER_DEMO.HARMONIZED.BULK_REEVALUATE(VARCHAR, INT);
 CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.BULK_REEVALUATE(
     P_CRITERIA VARCHAR,
     P_BATCH_SIZE INT DEFAULT 100,
@@ -366,7 +363,6 @@ $$;
 --   P_BATCH_SIZE - Batch size for pipeline processing (default 100)
 --   P_RUN_ID     - Optional run ID for traceability
 -- ============================================================================
-DROP PROCEDURE IF EXISTS HARMONIZER_DEMO.HARMONIZED.FORCE_REEVALUATE_SCORES(ARRAY, INT, VARCHAR);
 CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.FORCE_REEVALUATE_SCORES(
     P_ITEM_IDS ARRAY DEFAULT NULL,
     P_BATCH_SIZE INT DEFAULT 100,

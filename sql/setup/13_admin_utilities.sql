@@ -2,11 +2,16 @@
 -- sql/setup/13_admin_utilities.sql
 -- Retail Data Harmonizer - Utility Stored Procedures
 --
--- Supporting procedures for the Streamlit app:
---   - Record locking for multi-user review
---   - Pipeline stats
---   - AI_SIMILARITY comparison
---   - Config management
+-- Creates:
+--   1. GET_PIPELINE_STATS() procedure (dashboard stats)
+--   2. ACQUIRE_REVIEW_LOCK() / RELEASE_REVIEW_LOCK() procedures (multi-user locking)
+--   3. COMPARE_ITEMS_WITH_AI() procedure (AI similarity comparison)
+--   4. GET_REVIEW_SUMMARY() procedure (per-user queue summary)
+--   5. RESET_PIPELINE() procedure (full pipeline state reset)
+--   6. MASTER_ORCHESTRATION() procedure (full pipeline trigger)
+--   7. CONFIG management procedures
+--
+-- Prerequisites: 02_schema_and_tables.sql, 10_item_lineage.sql
 -- ============================================================================
 
 USE ROLE HARMONIZER_DEMO_ROLE;
@@ -285,32 +290,45 @@ END;
 $$;
 
 -- ============================================================================
--- Update config setting
+-- Update config settings (bulk, idempotent MERGE from a VARIANT object)
 -- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.ANALYTICS.UPDATE_CONFIG(KEY_NAME VARCHAR, KEY_VALUE VARCHAR)
+-- Accepts an OBJECT mapping CONFIG_KEY -> value (string/number/boolean).
+-- Updates existing keys and inserts any missing ones in a single statement.
+-- Used by the Settings API (POST /api/v2/settings) to persist changes.
+-- Drop the old single-key signature so no stale overload remains.
+DROP PROCEDURE IF EXISTS HARMONIZER_DEMO.ANALYTICS.UPDATE_CONFIG(VARCHAR, VARCHAR);
+
+CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.ANALYTICS.UPDATE_CONFIG(P_SETTINGS VARIANT)
 RETURNS STRING
 LANGUAGE SQL
-COMMENT = 'Updates or inserts a configuration setting'
+COMMENT = 'Bulk upsert of configuration values from a VARIANT object (CONFIG_KEY -> value) via MERGE. Used by the Settings API.'
 EXECUTE AS OWNER
 AS
 $$
+DECLARE
+    v_keys INTEGER := 0;
 BEGIN
-    -- Input validation
-    IF (:KEY_NAME IS NULL OR TRIM(:KEY_NAME) = '') THEN
-        RETURN 'Error: CONFIG_KEY cannot be null or empty';
+    IF (:P_SETTINGS IS NULL) THEN
+        RETURN '{"status": "error", "message": "P_SETTINGS is null"}';
     END IF;
 
-    UPDATE HARMONIZER_DEMO.ANALYTICS.CONFIG
-    SET CONFIG_VALUE = :KEY_VALUE,
-        UPDATED_AT = CURRENT_TIMESTAMP()
-    WHERE CONFIG_KEY = :KEY_NAME;
+    MERGE INTO HARMONIZER_DEMO.ANALYTICS.CONFIG AS t
+    USING (
+        SELECT f.key::VARCHAR AS CONFIG_KEY, f.value::VARCHAR AS CONFIG_VALUE
+        FROM LATERAL FLATTEN(input => :P_SETTINGS) f
+    ) AS s
+    ON t.CONFIG_KEY = s.CONFIG_KEY
+    WHEN MATCHED THEN
+        UPDATE SET t.CONFIG_VALUE = s.CONFIG_VALUE, t.UPDATED_AT = CURRENT_TIMESTAMP()
+    WHEN NOT MATCHED THEN
+        INSERT (CONFIG_KEY, CONFIG_VALUE) VALUES (s.CONFIG_KEY, s.CONFIG_VALUE);
 
-    IF (SQLROWCOUNT = 0) THEN
-        INSERT INTO HARMONIZER_DEMO.ANALYTICS.CONFIG (CONFIG_KEY, CONFIG_VALUE)
-        VALUES (:KEY_NAME, :KEY_VALUE);
-    END IF;
-
-    RETURN 'Config updated: ' || :KEY_NAME || ' = ' || :KEY_VALUE;
+    v_keys := SQLROWCOUNT;
+    RETURN '{"status": "updated", "keys": ' || :v_keys || '}';
+EXCEPTION
+    WHEN OTHER THEN
+        LET err_msg VARCHAR := SQLERRM;
+        RETURN '{"status": "error", "message": "' || REPLACE(:err_msg, '"', '''') || '"}';
 END;
 $$;
 

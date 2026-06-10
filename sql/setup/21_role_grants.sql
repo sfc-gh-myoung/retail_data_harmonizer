@@ -73,7 +73,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA HARMONIZER_DEMO.
 --   ANALYTICS.ACCURACY_TEST_SET
 --   ANALYTICS.ACCURACY_TEST_RESULTS
 --   ANALYTICS.ACCURACY_TEST_JOBS
---   ANALYTICS.CLASSIFICATION_JOBS
 
 -- ============================================================================
 -- View Grants - All Schemas
@@ -107,17 +106,11 @@ GRANT USAGE ON FUTURE PROCEDURES IN SCHEMA HARMONIZER_DEMO.HARMONIZED
     TO ROLE HARMONIZER_DEMO_ROLE;
 
 -- Specific procedures for reference:
---   HARMONIZED.CLASSIFY_RAW_ITEMS
---   HARMONIZED.MATCH_CORTEX_SEARCH
---   HARMONIZED.MATCH_COSINE_SIMILARITY
---   HARMONIZED.MATCH_LLM_SEMANTIC
---   HARMONIZED.COMPUTE_ENSEMBLE_WITH_CONDITIONAL_LLM (self-contained finalizer)
---   HARMONIZED.RUN_MATCHING_PIPELINE
+--   HARMONIZED.RUN_MATCHING_PIPELINE (legacy, use Task DAG)
 --   HARMONIZED.VECTOR_PREP_BATCH (stream consumer)
 --   HARMONIZED.MATCH_CORTEX_SEARCH_BATCH (staging table writer)
 --   HARMONIZED.MATCH_COSINE_BATCH (staging table writer)
 --   HARMONIZED.MATCH_EDIT_BATCH (staging table writer)
---   HARMONIZED.MERGE_STAGING_TO_MATCHES (staging merger)
 --   HARMONIZED.SUBMIT_REVIEW
 --   HARMONIZED.FORCE_REEVALUATE_SCORES (full score recalculation)
 --   HARMONIZED.ENABLE_PARALLEL_PIPELINE_TASKS
@@ -125,14 +118,10 @@ GRANT USAGE ON FUTURE PROCEDURES IN SCHEMA HARMONIZER_DEMO.HARMONIZED
 --   HARMONIZED.GET_PIPELINE_STATUS
 --   (Note: To trigger pipeline manually, use: EXECUTE TASK HARMONIZED.DEDUP_FASTPATH_TASK)
 --   
---   Accuracy/Classification Job Tracking:
+--   Accuracy Job Tracking:
 --   HARMONIZED.START_ACCURACY_TEST_JOB
 --   HARMONIZED.UPDATE_ACCURACY_TEST_PROGRESS
 --   HARMONIZED.GET_ACCURACY_TEST_JOB
---   HARMONIZED.START_CLASSIFICATION_JOB
---   HARMONIZED.UPDATE_CLASSIFICATION_PROGRESS
---   HARMONIZED.GET_CLASSIFICATION_JOB
---   HARMONIZED.PROCESS_CLASSIFICATION_JOB
 
 -- ============================================================================
 -- Procedure Grants - ANALYTICS Schema
@@ -173,9 +162,9 @@ GRANT USAGE ON FUTURE FUNCTIONS IN SCHEMA HARMONIZER_DEMO.ANALYTICS
 -- ============================================================================
 -- Task Grants
 -- ============================================================================
--- Grant ability to execute tasks on the account (required for task execution)
--- Note: This is an account-level privilege that must be granted by ACCOUNTADMIN
-GRANT EXECUTE TASK ON ACCOUNT TO ROLE HARMONIZER_DEMO_ROLE;
+-- Note: GRANT EXECUTE TASK ON ACCOUNT is granted in 01_roles_and_warehouse.sql,
+-- which must run before any task is RESUMED (scripts 15 and 18). Granting it
+-- here would be too late and cause transient task-execution failures.
 
 -- Grant ability to operate tasks (view, resume, suspend)
 GRANT MONITOR, OPERATE ON ALL TASKS IN SCHEMA HARMONIZER_DEMO.HARMONIZED 

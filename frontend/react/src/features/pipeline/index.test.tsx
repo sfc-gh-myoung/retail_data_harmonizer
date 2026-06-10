@@ -14,7 +14,6 @@ vi.mock('./hooks', () => ({
 vi.mock('./hooks/use-pipeline-actions', () => ({
   usePipelineActions: vi.fn(() => ({
     startPipeline: { mutate: vi.fn(), isPending: false },
-    stopPipeline: { mutate: vi.fn(), isPending: false },
     toggleTask: { mutate: vi.fn(), isPending: false },
     enableAllTasks: { mutate: vi.fn(), isPending: false },
     disableAllTasks: { mutate: vi.fn(), isPending: false },
@@ -102,7 +101,6 @@ function setupMocks(overrides: {
   // Re-set usePipelineActions mock (cleared by vi.clearAllMocks)
   vi.mocked(usePipelineActions).mockReturnValue(overrides.actions ?? {
     startPipeline: { mutate: vi.fn(), isPending: false },
-    stopPipeline: { mutate: vi.fn(), isPending: false },
     toggleTask: { mutate: vi.fn(), isPending: false },
     enableAllTasks: { mutate: vi.fn(), isPending: false },
     disableAllTasks: { mutate: vi.fn(), isPending: false },
@@ -205,7 +203,6 @@ describe('Pipeline', () => {
     setupMocks({
       actions: {
         startPipeline: { mutate: vi.fn(), isPending: false },
-        stopPipeline: { mutate: vi.fn(), isPending: false },
         toggleTask: { mutate: vi.fn(), isPending: false },
         enableAllTasks: { mutate: enableMutate, isPending: false },
         disableAllTasks: { mutate: vi.fn(), isPending: false },
@@ -224,7 +221,6 @@ describe('Pipeline', () => {
     setupMocks({
       actions: {
         startPipeline: { mutate: vi.fn(), isPending: false },
-        stopPipeline: { mutate: vi.fn(), isPending: false },
         toggleTask: { mutate: vi.fn(), isPending: false },
         enableAllTasks: { mutate: vi.fn(), isPending: false },
         disableAllTasks: { mutate: disableMutate, isPending: false },

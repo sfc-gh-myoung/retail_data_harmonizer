@@ -18,12 +18,6 @@ export function usePipelineActions() {
     onSuccess: invalidateAll,
   })
 
-  const stopPipeline = useMutation({
-    mutationFn: (jobId: string) =>
-      postApi('/v2/pipeline/stop', { job_id: jobId }, actionResponseSchema),
-    onSuccess: invalidateAll,
-  })
-
   const toggleTask = useMutation({
     mutationFn: ({ taskName, action }: { taskName: string; action: 'resume' | 'suspend' }) =>
       postApi('/v2/pipeline/toggle', { task_name: taskName, action }, actionResponseSchema),
@@ -47,7 +41,6 @@ export function usePipelineActions() {
 
   return {
     runPipeline,
-    stopPipeline,
     toggleTask,
     enableAllTasks,
     disableAllTasks,

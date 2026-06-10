@@ -9,6 +9,10 @@ USE ROLE HARMONIZER_DEMO_ROLE;
 USE DATABASE HARMONIZER_DEMO;
 USE WAREHOUSE HARMONIZER_DEMO_WH;
 
+-- Reset for idempotent re-run
+TRUNCATE TABLE IF EXISTS HARMONIZER_DEMO.RAW.EVENTS;
+SELECT '[PASS] EVENTS reset' AS progress;
+
 -- ============================================================================
 -- EVENTS: 103 Events across 5 venues (Q4 2025 - Q3 2026)
 -- Matches every EVENT_ID referenced in raw retail item seed files (04k-04o)

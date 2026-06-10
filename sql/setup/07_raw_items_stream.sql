@@ -34,3 +34,9 @@ CREATE OR REPLACE STREAM HARMONIZER_DEMO.HARMONIZED.RAW_ITEMS_STREAM
   APPEND_ONLY = TRUE
   SHOW_INITIAL_ROWS = TRUE
   COMMENT = 'Tracks new raw items for exactly-once processing in parallel vector matching';
+
+
+SELECT '07_raw_items_stream setup complete!' AS status;
+
+
+SELECT '07_raw_items_stream setup complete!' AS status;

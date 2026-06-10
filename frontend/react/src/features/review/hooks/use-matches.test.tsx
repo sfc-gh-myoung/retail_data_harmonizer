@@ -8,15 +8,11 @@ import {
   useAlternatives,
   useBulkAction,
   useUpdateMatch,
-  useSkipMatch,
-  useFeedback,
-  useSelectAlternative,
 } from './use-matches'
 
 vi.mock('@/lib/api', () => ({
   fetchApi: vi.fn(),
   postApi: vi.fn(),
-  postFormApi: vi.fn(),
 }))
 
 vi.mock('sonner', () => ({
@@ -26,7 +22,7 @@ vi.mock('sonner', () => ({
   },
 }))
 
-import { fetchApi, postApi, postFormApi } from '@/lib/api'
+import { fetchApi, postApi } from '@/lib/api'
 import { toast } from 'sonner'
 
 const mockMatch = {
@@ -489,153 +485,3 @@ describe('useUpdateMatch', () => {
   })
 })
 
-describe('useSkipMatch', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('calls review action endpoint with skip action', async () => {
-    vi.mocked(postFormApi).mockResolvedValueOnce({ success: true })
-
-    const { result } = renderHook(() => useSkipMatch(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1' })
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(postFormApi).toHaveBeenCalled()
-  })
-
-  it('shows success toast on skip', async () => {
-    vi.mocked(postFormApi).mockResolvedValueOnce({ success: true })
-
-    const { result } = renderHook(() => useSkipMatch(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1' })
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(toast.success).toHaveBeenCalledWith('Match skipped')
-  })
-
-  it('shows error toast on failure', async () => {
-    vi.mocked(postFormApi).mockRejectedValueOnce(new Error('Skip failed'))
-
-    const { result } = renderHook(() => useSkipMatch(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1' })
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-
-    expect(toast.error).toHaveBeenCalledWith('Failed to skip match: Skip failed')
-  })
-
-  it('handles non-Error error objects', async () => {
-    vi.mocked(postFormApi).mockRejectedValueOnce('String error')
-
-    const { result } = renderHook(() => useSkipMatch(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1' })
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-
-    expect(toast.error).toHaveBeenCalledWith('Failed to skip match: Unknown error')
-  })
-})
-
-describe('useFeedback', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('calls feedback endpoint', async () => {
-    vi.mocked(postFormApi).mockResolvedValueOnce({ success: true })
-
-    const { result } = renderHook(() => useFeedback(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ matchId: 'mid-1', itemId: 'item-1', feedback: 'up' })
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(postFormApi).toHaveBeenCalled()
-  })
-})
-
-describe('useSelectAlternative', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('calls select-alternative endpoint', async () => {
-    vi.mocked(postFormApi).mockResolvedValueOnce({ success: true })
-
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useSelectAlternative(), {
-      wrapper: createWrapper(queryClient),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1', standardId: 'STD-002' })
-    })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(postFormApi).toHaveBeenCalled()
-    expect(toast.success).toHaveBeenCalledWith('Alternative selected')
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['matches'], refetchType: 'none' })
-  })
-
-  it('shows error toast on failure', async () => {
-    vi.mocked(postFormApi).mockRejectedValueOnce(new Error('Selection failed'))
-
-    const { result } = renderHook(() => useSelectAlternative(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1', standardId: 'STD-002' })
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-
-    expect(toast.error).toHaveBeenCalledWith('Failed to select alternative: Selection failed')
-  })
-
-  it('handles non-Error error objects', async () => {
-    vi.mocked(postFormApi).mockRejectedValueOnce('String error')
-
-    const { result } = renderHook(() => useSelectAlternative(), {
-      wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      result.current.mutate({ itemId: 'item-1', matchId: 'mid-1', standardId: 'STD-002' })
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-
-    expect(toast.error).toHaveBeenCalledWith('Failed to select alternative: Unknown error')
-  })
-})

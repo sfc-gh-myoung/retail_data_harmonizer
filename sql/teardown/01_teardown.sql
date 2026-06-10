@@ -10,8 +10,7 @@
 --   - HARMONIZER_DEMO database (CASCADE removes all schemas, tables, views, tasks)
 --   - HARMONIZER_DEMO_WH warehouse
 --   - HARMONIZER_DEMO_ROLE role
---   - HARMONIZER_DEMO_CPU_POOL compute pool (if created)
---   - PYPI_ACCESS_INTEGRATION external access integration (if created)
+--   - HARMONIZER_POOL compute pool (if created via spcs_deploy.sql)
 --
 -- Note: Tasks must be suspended before database DROP
 -- ============================================================================
@@ -41,12 +40,9 @@ ALTER TASK IF EXISTS HARMONIZER_DEMO.HARMONIZED.STAGING_MERGE_TASK SUSPEND;
 DROP DATABASE IF EXISTS HARMONIZER_DEMO;
 DROP WAREHOUSE IF EXISTS HARMONIZER_DEMO_WH;
 
--- Drop compute pool (created by 00_compute_pool.sql; requires ACCOUNTADMIN)
+-- Drop compute pool (created by sql/utils/spcs_deploy.sql; requires ACCOUNTADMIN)
 USE ROLE ACCOUNTADMIN;
-DROP COMPUTE POOL IF EXISTS HARMONIZER_DEMO_CPU_POOL;
-
--- Drop external access integration (created by 00_external_access.sql)
-DROP INTEGRATION IF EXISTS PYPI_ACCESS_INTEGRATION;
+DROP COMPUTE POOL IF EXISTS HARMONIZER_POOL;
 
 -- Revoke account-level privilege granted in 21_grants.sql
 REVOKE EXECUTE TASK ON ACCOUNT FROM ROLE HARMONIZER_DEMO_ROLE;

@@ -8,14 +8,12 @@ Endpoints:
 - GET /agreement - Algorithm agreement analysis (60s cache)
 - GET /source-performance - Performance by source system (60s cache)
 - GET /method-accuracy - Accuracy metrics per method (60s cache)
-- GET / - Legacy aggregated endpoint (for backward compatibility)
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.api import snowflake_client as sf
 from backend.api.routes.comparison import agreement, method_accuracy, source_performance
 from backend.api.schemas.comparison import Algorithm, AlgorithmsResponse
 
@@ -65,122 +63,3 @@ async def get_algorithms() -> AlgorithmsResponse:
     """
     return AlgorithmsResponse(algorithms=ALGORITHMS)
 
-
-# ---------------------------------------------------------------------------
-# Legacy endpoint for backward compatibility
-# ---------------------------------------------------------------------------
-
-
-@router.get("")
-async def get_comparison():
-    """Return algorithm comparison data for the React frontend.
-
-    DEPRECATED: Use individual endpoints for better performance.
-    This endpoint is kept for backward compatibility.
-    """
-    db = sf.get_database()
-
-    # Get agreement analysis
-    try:
-        agreement_result = await sf.query(f"""
-            SELECT
-                CASE
-                    WHEN SEARCH_MATCHED_ID = COSINE_MATCHED_ID
-                         AND COSINE_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID
-                         AND EDIT_DISTANCE_MATCHED_ID = JACCARD_MATCHED_ID
-                         AND SEARCH_MATCHED_ID IS NOT NULL
-                         AND SEARCH_MATCHED_ID != 'None'
-                    THEN '4 of 4 Agree'
-                    WHEN (SEARCH_MATCHED_ID = COSINE_MATCHED_ID AND COSINE_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (SEARCH_MATCHED_ID = COSINE_MATCHED_ID AND COSINE_MATCHED_ID = JACCARD_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (SEARCH_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID AND EDIT_DISTANCE_MATCHED_ID = JACCARD_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (COSINE_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID AND EDIT_DISTANCE_MATCHED_ID = JACCARD_MATCHED_ID AND COSINE_MATCHED_ID IS NOT NULL AND COSINE_MATCHED_ID != 'None')
-                    THEN '3 of 4 Agree'
-                    WHEN (SEARCH_MATCHED_ID = COSINE_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (SEARCH_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (SEARCH_MATCHED_ID = JACCARD_MATCHED_ID AND SEARCH_MATCHED_ID IS NOT NULL AND SEARCH_MATCHED_ID != 'None')
-                        OR (COSINE_MATCHED_ID = EDIT_DISTANCE_MATCHED_ID AND COSINE_MATCHED_ID IS NOT NULL AND COSINE_MATCHED_ID != 'None')
-                        OR (COSINE_MATCHED_ID = JACCARD_MATCHED_ID AND COSINE_MATCHED_ID IS NOT NULL AND COSINE_MATCHED_ID != 'None')
-                        OR (EDIT_DISTANCE_MATCHED_ID = JACCARD_MATCHED_ID AND EDIT_DISTANCE_MATCHED_ID IS NOT NULL AND EDIT_DISTANCE_MATCHED_ID != 'None')
-                    THEN '2 of 4 Agree'
-                    ELSE '0 of 4 Agree'
-                END AS agreement_level,
-                COUNT(*) AS match_count,
-                ROUND(AVG(ENSEMBLE_SCORE), 4) AS avg_confidence
-            FROM {db}.HARMONIZED.ITEM_MATCHES
-            WHERE CORTEX_SEARCH_SCORE IS NOT NULL
-            GROUP BY agreement_level
-            ORDER BY agreement_level DESC
-        """)
-    except Exception:
-        agreement_result = []
-
-    agreement_data = [
-        {
-            "level": row.get("AGREEMENT_LEVEL", ""),
-            "count": int(row.get("MATCH_COUNT", 0) or 0),
-            "avgConfidence": float(row.get("AVG_CONFIDENCE", 0) or 0),
-        }
-        for row in agreement_result
-    ]
-
-    # Get source performance
-    try:
-        source_result = await sf.query(f"""
-            SELECT
-                ri.SOURCE_SYSTEM,
-                COUNT(*) AS item_count,
-                ROUND(AVG(im.CORTEX_SEARCH_SCORE), 4) AS avg_search,
-                ROUND(AVG(im.COSINE_SCORE), 4) AS avg_cosine,
-                ROUND(AVG(im.EDIT_DISTANCE_SCORE), 4) AS avg_edit,
-                ROUND(AVG(im.JACCARD_SCORE), 4) AS avg_jaccard,
-                ROUND(AVG(im.ENSEMBLE_SCORE), 4) AS avg_ensemble
-            FROM {db}.RAW.RAW_RETAIL_ITEMS ri
-            JOIN {db}.HARMONIZED.ITEM_MATCHES im ON ri.ITEM_ID = im.RAW_ITEM_ID
-            WHERE im.ENSEMBLE_SCORE IS NOT NULL
-            GROUP BY ri.SOURCE_SYSTEM
-            ORDER BY ri.SOURCE_SYSTEM
-        """)
-    except Exception:
-        source_result = []
-
-    source_performance_data = [
-        {
-            "source": row.get("SOURCE_SYSTEM", ""),
-            "itemCount": int(row.get("ITEM_COUNT", 0) or 0),
-            "avgSearch": float(row.get("AVG_SEARCH", 0) or 0),
-            "avgCosine": float(row.get("AVG_COSINE", 0) or 0),
-            "avgEdit": float(row.get("AVG_EDIT", 0) or 0),
-            "avgJaccard": float(row.get("AVG_JACCARD", 0) or 0),
-            "avgEnsemble": float(row.get("AVG_ENSEMBLE", 0) or 0),
-        }
-        for row in source_result
-    ]
-
-    # Get method accuracy
-    try:
-        accuracy_result = await sf.query(f"SELECT * FROM {db}.ANALYTICS.DT_METHOD_ACCURACY")
-        accuracy_data = accuracy_result[0] if accuracy_result else {}
-    except Exception:
-        accuracy_data = {}
-
-    method_accuracy_data = {
-        "totalConfirmed": int(accuracy_data.get("TOTAL_CONFIRMED", 0) or 0),
-        "searchCorrect": int(accuracy_data.get("SEARCH_CORRECT", 0) or 0),
-        "searchAccuracyPct": float(accuracy_data.get("SEARCH_ACCURACY_PCT", 0) or 0),
-        "cosineCorrect": int(accuracy_data.get("COSINE_CORRECT", 0) or 0),
-        "cosineAccuracyPct": float(accuracy_data.get("COSINE_ACCURACY_PCT", 0) or 0),
-        "editCorrect": int(accuracy_data.get("EDIT_CORRECT", 0) or 0),
-        "editAccuracyPct": float(accuracy_data.get("EDIT_ACCURACY_PCT", 0) or 0),
-        "jaccardCorrect": int(accuracy_data.get("JACCARD_CORRECT", 0) or 0),
-        "jaccardAccuracyPct": float(accuracy_data.get("JACCARD_ACCURACY_PCT", 0) or 0),
-        "ensembleCorrect": int(accuracy_data.get("ENSEMBLE_CORRECT", 0) or 0),
-        "ensembleAccuracyPct": float(accuracy_data.get("ENSEMBLE_ACCURACY_PCT", 0) or 0),
-    }
-
-    return {
-        "algorithms": [a.model_dump() for a in ALGORITHMS],
-        "agreement": agreement_data,
-        "sourcePerformance": source_performance_data,
-        "methodAccuracy": method_accuracy_data,
-    }

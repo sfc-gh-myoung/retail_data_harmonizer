@@ -32,13 +32,12 @@ sql/setup/
 ├── 11_matching/                # Core matching logic
 │   ├── 11a_cortex_search_setup.sql
 │   ├── 11b_matcher_functions.sql
-│   ├── 11c_ensemble_and_routing.sql
-│   └── 11d_stream_handlers.sql
+│   └── 11c_ensemble_and_routing.sql
 ├── 12_parallel_matchers.sql    # Batch matching procedures (VECTOR_PREP, 4 match methods)
 ├── 13_admin_utilities.sql      # Utility stored procedures
 ├── 14_cost_tracking.sql        # Cost tracking and analytics views
 ├── 15_task_coordination.sql    # Table-based task coordination (message queue pattern)
-├── 16_task_dag_definition.sql  # 8-task Snowflake Task DAG (DEDUP → CLASSIFY → PREP → 4×parallel → ENSEMBLE)
+├── 16_task_dag_definition.sql  # 10-task Snowflake Task DAG (DEDUP → CLASSIFY → PREP → 4×parallel → MERGE → ENSEMBLE → ROUTER)
 ├── 17_reevaluation_triggers.sql # Match reevaluation procedures
 ├── 18_api_views.sql            # Dashboard monitoring views + task state cache (atomic swap pattern)
 ├── 19_materialized_aggregates.sql # Dynamic tables for dashboard KPIs

@@ -56,7 +56,7 @@ class TestMatchSearchRequest:
             source="POS_SYSTEM_A",
             category="Beverages",
             matchSource="CORTEX_SEARCH",
-            sortBy="score",
+            sortBy="ensembleScore",
             sortOrder="asc",
             groupBy="none",
         )
@@ -66,7 +66,7 @@ class TestMatchSearchRequest:
         assert request.source == "POS_SYSTEM_A"
         assert request.category == "Beverages"
         assert request.matchSource == "CORTEX_SEARCH"
-        assert request.sortBy == "score"
+        assert request.sortBy == "ensembleScore"
         assert request.sortOrder == "asc"
         assert request.groupBy == "none"
 
@@ -140,7 +140,6 @@ class TestMatchItem:
             "jaccardScore": 0.81,
             "ensembleScore": 87.5,
             "maxRawScore": 0.95,
-            "score": 87.5,
             "matchSource": "CORTEX_SEARCH",
             "matchMethod": "ENSEMBLE",
             "agreementLevel": 4,
@@ -204,7 +203,6 @@ class TestMatchSearchResponse:
             "llmScore": 0.5,
             "ensembleScore": 80.0,
             "maxRawScore": 0.9,
-            "score": 80.0,
             "matchSource": "CORTEX_SEARCH",
             "matchMethod": "ENSEMBLE",
             "agreementLevel": 3,
@@ -507,7 +505,6 @@ class TestEdgeCases:
             "llmScore": 0.5,
             "ensembleScore": 80.0,
             "maxRawScore": 0.9,
-            "score": 80.0,
             "matchSource": "CORTEX_SEARCH",
             "matchMethod": "ENSEMBLE",
             "agreementLevel": 3,

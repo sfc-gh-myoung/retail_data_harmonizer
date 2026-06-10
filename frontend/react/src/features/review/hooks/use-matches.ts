@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { fetchApi, postApi, postFormApi } from '@/lib/api'
+import { fetchApi, postApi } from '@/lib/api'
 import {
   matchesResponseSchema,
   filterOptionsSchema,
@@ -107,12 +107,12 @@ export function useUpdateMatch() {
           // When updating related items, filter by normalized description
           const normalizedDesc = normalizeDescription(rawName)
           filteredItems = old.items.filter(
-            (item) => normalizeDescription(item.rawName) !== normalizedDesc
+            (item: Match) => normalizeDescription(item.rawName) !== normalizedDesc
           )
           removedCount = old.items.length - filteredItems.length
         } else {
           // Single item update
-          filteredItems = old.items.filter((item) => item.id !== id)
+          filteredItems = old.items.filter((item: Match) => item.id !== id)
           removedCount = 1
         }
         
@@ -151,53 +151,3 @@ export function useUpdateMatch() {
   })
 }
 
-export function useSkipMatch() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ itemId, matchId }: { itemId: string; matchId: string }) =>
-      postFormApi('/ui/review/action', new URLSearchParams({
-        item_id: itemId,
-        match_id: matchId,
-        action: 'SKIP',
-      }).toString()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'], refetchType: 'none' })
-      toast.success('Match skipped')
-    },
-    onError: (error) => {
-      toast.error(`Failed to skip match: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    },
-  })
-}
-
-export function useFeedback() {
-  return useMutation({
-    mutationFn: ({ matchId, itemId, feedback }: { matchId: string; itemId: string; feedback: 'up' | 'down' }) =>
-      postFormApi('/ui/review/feedback', new URLSearchParams({
-        match_id: matchId,
-        item_id: itemId,
-        feedback,
-      }).toString()),
-  })
-}
-
-export function useSelectAlternative() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ itemId, matchId, standardId }: { itemId: string; matchId: string; standardId: string }) =>
-      postFormApi('/ui/review/select-alternative', new URLSearchParams({
-        item_id: itemId,
-        match_id: matchId,
-        standard_id: standardId,
-      }).toString()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'], refetchType: 'none' })
-      toast.success('Alternative selected')
-    },
-    onError: (error) => {
-      toast.error(`Failed to select alternative: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    },
-  })
-}

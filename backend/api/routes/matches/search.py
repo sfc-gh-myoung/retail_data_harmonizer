@@ -96,7 +96,6 @@ async def search_matches(body: MatchSearchRequest):
         "maxRawScore": "MAX_RAW_SCORE",
         "ensemble_score": "ENSEMBLE_SCORE",
         "ensembleScore": "ENSEMBLE_SCORE",
-        "score": "ENSEMBLE_SCORE",
         "match_source": "PRIMARY_MATCH_SOURCE",
         "matchSource": "PRIMARY_MATCH_SOURCE",
         "boost": "AGREEMENT_LEVEL",
@@ -362,8 +361,6 @@ async def search_matches(body: MatchSearchRequest):
                 "jaccardScore": float(m.get("JACCARD_SCORE", 0) or 0),
                 "ensembleScore": float(m.get("ENSEMBLE_SCORE", 0) or 0),
                 "maxRawScore": float(m.get("MAX_RAW_SCORE", 0) or 0),
-                # Legacy field for backward compatibility
-                "score": float(m.get("ENSEMBLE_SCORE", 0) or 0),
                 # Match metadata
                 "matchSource": m.get("PRIMARY_MATCH_SOURCE", "") or "",
                 "matchMethod": m.get("MATCH_METHOD", "") or "",

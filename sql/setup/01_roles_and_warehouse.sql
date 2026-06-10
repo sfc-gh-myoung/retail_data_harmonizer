@@ -22,7 +22,7 @@ CREATE SCHEMA IF NOT EXISTS HARMONIZER_DEMO.ANALYTICS
 CREATE WAREHOUSE IF NOT EXISTS HARMONIZER_DEMO_WH
     WAREHOUSE_TYPE = 'STANDARD'
     WAREHOUSE_SIZE = 'MEDIUM'
-    RESOURCE_CONSTRAINT = 'STANDARD_GEN_2'
+    GENERATION = '2'
     MIN_CLUSTER_COUNT = 1
     MAX_CLUSTER_COUNT = 3
     SCALING_POLICY = 'STANDARD'
@@ -53,6 +53,16 @@ GRANT OPERATE ON WAREHOUSE HARMONIZER_DEMO_WH TO ROLE HARMONIZER_DEMO_ROLE;
 
 -- Cortex access
 GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO ROLE HARMONIZER_DEMO_ROLE;
+
+-- Account-level task execution privilege.
+-- MUST be granted here (before any task is RESUMED in later scripts, e.g.
+-- 15_task_coordination.sql and 18_api_views.sql). Snowflake validates this
+-- privilege at task execution time, so resuming a task before the grant
+-- causes scheduled runs to fail with "EXECUTE TASK privilege must be granted
+-- to owner role" until the grant lands. Requires ACCOUNTADMIN.
+USE ROLE ACCOUNTADMIN;
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE HARMONIZER_DEMO_ROLE;
+USE ROLE SECURITYADMIN;
 
 -- Grant role to SYSADMIN for hierarchy
 GRANT ROLE HARMONIZER_DEMO_ROLE TO ROLE SYSADMIN;

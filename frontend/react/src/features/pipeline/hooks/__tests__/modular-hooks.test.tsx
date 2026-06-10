@@ -229,28 +229,6 @@ describe('usePipelineActions', () => {
     })
   })
 
-  describe('stopPipeline', () => {
-    it('calls stop endpoint with job ID', async () => {
-      vi.mocked(postApi).mockResolvedValueOnce(mockActionResponse)
-
-      const { result } = renderHook(() => usePipelineActions(), {
-        wrapper: createWrapper(),
-      })
-
-      await act(async () => {
-        result.current.stopPipeline.mutate('job-123')
-      })
-
-      await waitFor(() => expect(result.current.stopPipeline.isSuccess).toBe(true))
-
-      expect(postApi).toHaveBeenCalledWith(
-        '/v2/pipeline/stop',
-        { job_id: 'job-123' },
-        expect.any(Object)
-      )
-    })
-  })
-
   describe('toggleTask', () => {
     it('calls toggle endpoint with task name and action', async () => {
       vi.mocked(postApi).mockResolvedValueOnce(mockActionResponse)

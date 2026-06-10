@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchApi, patchApi, postApi } from '@/lib/api'
+import { fetchApi, postApi } from '@/lib/api'
 import {
   settingsSchema,
-  voidResponseSchema,
   type Settings,
 } from '@/lib/schemas'
 import { z } from 'zod'
@@ -22,36 +21,20 @@ export function useSettings() {
   })
 }
 
-export function useUpdateSettings() {
+// Editable settings payload (cost is not user-editable from the Settings page).
+export type SettingsUpdate = Pick<
+  Settings,
+  'weights' | 'thresholds' | 'performance' | 'automation'
+>
+
+export function useSaveSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (settings: Partial<Settings>) =>
-      patchApi('/v2/settings', settings, settingsSchema),
+    mutationFn: (update: SettingsUpdate) =>
+      postApi('/v2/settings', update, settingsSchema),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
-}
-
-export function useResetSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () => postApi('/settings/reset', {}, voidResponseSchema),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
-}
-
-export function useReEvaluate() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () => postApi('/v2/settings/re-evaluate', {}, voidResponseSchema),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })

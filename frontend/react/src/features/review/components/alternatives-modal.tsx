@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,44 +16,21 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useAlternatives, useSelectAlternative, type Alternative } from '../hooks/use-matches'
+import { useAlternatives } from '../hooks/use-matches'
 import { ConfidenceBadge } from './confidence-badge'
 
 interface AlternativesModalProps {
   itemId: string | null
-  matchId: string
   rawDescription: string
   onClose: () => void
 }
 
 export function AlternativesModal({
   itemId,
-  matchId,
   rawDescription,
   onClose,
 }: AlternativesModalProps) {
   const { data, isLoading, error } = useAlternatives(itemId)
-  const selectAlternative = useSelectAlternative()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const handleSelect = (alternative: Alternative) => {
-    setSelectedId(alternative.standardItemId)
-    selectAlternative.mutate(
-      {
-        itemId: itemId!,
-        matchId,
-        standardId: alternative.standardItemId,
-      },
-      {
-        onSuccess: () => {
-          onClose()
-        },
-        onError: () => {
-          setSelectedId(null)
-        },
-      }
-    )
-  }
 
   return (
     <Dialog open={!!itemId} onOpenChange={() => onClose()}>
@@ -93,8 +69,7 @@ export function AlternativesModal({
                 <TableRow>
                   <TableHead>Candidate</TableHead>
                   <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                <TableHead className="text-right">Score</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -119,22 +94,6 @@ export function AlternativesModal({
                     </TableCell>
                     <TableCell className="text-right">
                       <ConfidenceBadge score={alt.score} />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        onClick={() => handleSelect(alt)}
-                        disabled={selectAlternative.isPending}
-                      >
-                        {selectedId === alt.standardItemId ? (
-                          <>
-                            <Check className="h-3 w-3 mr-1 animate-pulse" />
-                            Selecting...
-                          </>
-                        ) : (
-                          'Select'
-                        )}
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

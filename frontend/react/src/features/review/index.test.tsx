@@ -9,8 +9,6 @@ vi.mock('./hooks/use-matches', () => ({
   useBulkAction: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUpdateMatch: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useFilterOptions: vi.fn(),
-  useSkipMatch: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useFeedback: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 vi.mock('./components/confidence-badge', () => ({
@@ -32,8 +30,6 @@ import {
   useBulkAction,
   useUpdateMatch,
   useFilterOptions,
-  useSkipMatch,
-  useFeedback,
 } from './hooks/use-matches'
 
 const mockMatch = (overrides = {}) => ({
@@ -334,7 +330,6 @@ describe('Review', () => {
     // Action buttons visible
     expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /reject/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /skip/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /show alternatives/i })).toBeInTheDocument()
   })
 
@@ -381,58 +376,6 @@ describe('Review', () => {
       status: 'REJECTED',
       rawName: 'DIET COKE 12PK',
       updateRelated: true,
-    })
-  })
-
-  it('calls skipMatch when Skip is clicked in expanded row', () => {
-    const mockMutate = vi.fn()
-    vi.mocked(useSkipMatch).mockReturnValue({
-      mutate: mockMutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof useSkipMatch>)
-
-    setupDefaultMocks()
-    renderWithProviders(<Review />)
-
-    // Expand first row
-    const firstRow = screen.getByText('DIET COKE 12PK').closest('tr')!
-    fireEvent.click(firstRow)
-
-    fireEvent.click(screen.getByRole('button', { name: /skip/i }))
-    expect(mockMutate).toHaveBeenCalledWith({ itemId: 'item-1', matchId: 'mid-1' })
-  })
-
-  it('shows feedback buttons in expanded row', () => {
-    setupDefaultMocks()
-    renderWithProviders(<Review />)
-
-    // Expand first row
-    const firstRow = screen.getByText('DIET COKE 12PK').closest('tr')!
-    fireEvent.click(firstRow)
-
-    expect(screen.getByText('Feedback:')).toBeInTheDocument()
-    expect(screen.getByTitle('Thumbs up')).toBeInTheDocument()
-    expect(screen.getByTitle('Thumbs down')).toBeInTheDocument()
-  })
-
-  it('calls feedback mutation on thumbs up click', () => {
-    const mockMutate = vi.fn()
-    vi.mocked(useFeedback).mockReturnValue({
-      mutate: mockMutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof useFeedback>)
-
-    setupDefaultMocks()
-    renderWithProviders(<Review />)
-
-    const firstRow = screen.getByText('DIET COKE 12PK').closest('tr')!
-    fireEvent.click(firstRow)
-
-    fireEvent.click(screen.getByTitle('Thumbs up'))
-    expect(mockMutate).toHaveBeenCalledWith({
-      matchId: 'mid-1',
-      itemId: 'item-1',
-      feedback: 'up',
     })
   })
 
@@ -778,30 +721,6 @@ describe('Review', () => {
 
     expect(screen.getByText(/\$5\.99/)).toBeInTheDocument()
   })
-
-  // ── Feedback down button ────────────────────────────────────────────────
-
-  it('calls feedback mutation on thumbs down click', () => {
-    const mockMutate = vi.fn()
-    vi.mocked(useFeedback).mockReturnValue({
-      mutate: mockMutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof useFeedback>)
-
-    setupDefaultMocks()
-    renderWithProviders(<Review />)
-
-    const firstRow = screen.getByText('DIET COKE 12PK').closest('tr')!
-    fireEvent.click(firstRow)
-
-    fireEvent.click(screen.getByTitle('Thumbs down'))
-    expect(mockMutate).toHaveBeenCalledWith({
-      matchId: 'mid-1',
-      itemId: 'item-1',
-      feedback: 'down',
-    })
-  })
-
   // ── Non-actionable rows ─────────────────────────────────────────────────
 
   it('disables action buttons for non-actionable matches', () => {

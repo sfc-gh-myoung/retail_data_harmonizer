@@ -391,34 +391,60 @@ $$;
 CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.ROUTE_MATCHED_ITEMS()
 RETURNS VARIANT
 LANGUAGE SQL
-COMMENT = 'Routes scored items to HARMONIZED_ITEMS or REVIEW_QUEUE based on confidence. Single responsibility: item routing.'
+COMMENT = 'Routes scored items into a three-band model: auto-accept (>= AUTO_ACCEPT_THRESHOLD, gated on AUTO_ACCEPT_ENABLED), auto-reject (< AUTO_REJECT_THRESHOLD, gated on AUTO_REJECT_ENABLED), else human review. Single responsibility: item routing.'
 EXECUTE AS OWNER
 AS
 $$
 DECLARE
     v_run_id VARCHAR;
     v_to_harmonized INTEGER := 0;
-    v_to_harmonized_direct INTEGER := 0;
     v_to_review INTEGER := 0;
     v_to_rejected INTEGER := 0;
+    v_to_rejected_auto INTEGER := 0;
     v_remaining INTEGER := 0;
     v_promoted INTEGER := 0;
-    v_auto_accept_threshold NUMBER(5,2) := 0.80;
-    v_high_confidence_threshold NUMBER(5,2) := 0.90;
+    v_auto_accept_threshold NUMBER(5,2) := 0.75;
+    v_auto_reject_threshold NUMBER(5,2) := 0.45;
+    v_auto_accept_enabled BOOLEAN := TRUE;
+    v_auto_reject_enabled BOOLEAN := FALSE;
 BEGIN
     v_run_id := UUID_STRING();
     
     -- Register task start
     CALL HARMONIZER_DEMO.HARMONIZED.REGISTER_TASK_START(:v_run_id, 'ITEM_ROUTER');
     
-    -- Load threshold from config
+    -- Load thresholds and enable toggles from config
     BEGIN
         SELECT TO_NUMBER(CONFIG_VALUE, 10, 2) INTO v_auto_accept_threshold
         FROM HARMONIZER_DEMO.ANALYTICS.CONFIG WHERE CONFIG_KEY = 'AUTO_ACCEPT_THRESHOLD';
     EXCEPTION
-        WHEN OTHER THEN v_auto_accept_threshold := 0.60;
+        WHEN OTHER THEN v_auto_accept_threshold := 0.75;
     END;
-    v_auto_accept_threshold := COALESCE(v_auto_accept_threshold, 0.60);
+    v_auto_accept_threshold := COALESCE(v_auto_accept_threshold, 0.75);
+
+    BEGIN
+        SELECT TO_NUMBER(CONFIG_VALUE, 10, 2) INTO v_auto_reject_threshold
+        FROM HARMONIZER_DEMO.ANALYTICS.CONFIG WHERE CONFIG_KEY = 'AUTO_REJECT_THRESHOLD';
+    EXCEPTION
+        WHEN OTHER THEN v_auto_reject_threshold := 0.45;
+    END;
+    v_auto_reject_threshold := COALESCE(v_auto_reject_threshold, 0.45);
+
+    BEGIN
+        SELECT TO_BOOLEAN(CONFIG_VALUE) INTO v_auto_accept_enabled
+        FROM HARMONIZER_DEMO.ANALYTICS.CONFIG WHERE CONFIG_KEY = 'AUTO_ACCEPT_ENABLED';
+    EXCEPTION
+        WHEN OTHER THEN v_auto_accept_enabled := TRUE;
+    END;
+    v_auto_accept_enabled := COALESCE(v_auto_accept_enabled, TRUE);
+
+    BEGIN
+        SELECT TO_BOOLEAN(CONFIG_VALUE) INTO v_auto_reject_enabled
+        FROM HARMONIZER_DEMO.ANALYTICS.CONFIG WHERE CONFIG_KEY = 'AUTO_REJECT_ENABLED';
+    EXCEPTION
+        WHEN OTHER THEN v_auto_reject_enabled := FALSE;
+    END;
+    v_auto_reject_enabled := COALESCE(v_auto_reject_enabled, FALSE);
     
     -- =========================================================================
     -- Step 0: PROMOTE items from REVIEW_QUEUE that now meet auto-accept threshold
@@ -444,6 +470,7 @@ BEGIN
     FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
     JOIN HARMONIZER_DEMO.HARMONIZED.REVIEW_QUEUE rq ON rq.RAW_ITEM_ID = im.RAW_ITEM_ID
     WHERE im.ENSEMBLE_SCORE >= :v_auto_accept_threshold
+      AND :v_auto_accept_enabled
       AND rq.QUEUE_STATUS = 'PENDING'
       AND COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID) IS NOT NULL
       AND NOT EXISTS (
@@ -490,6 +517,7 @@ BEGIN
         CURRENT_USER()
     FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
     WHERE im.ENSEMBLE_SCORE IS NOT NULL
+      AND :v_auto_accept_enabled
       AND im.ENSEMBLE_SCORE >= :v_auto_accept_threshold
       AND im.STATUS = 'PENDING_REVIEW'
       AND COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID) IS NOT NULL
@@ -499,40 +527,6 @@ BEGIN
       );
     
     v_to_harmonized := SQLROWCOUNT;
-    
-    -- =========================================================================
-    -- Step 1b: Route VERY HIGH confidence items directly (score >= 0.90)
-    -- Backup catch for items that might have been missed in Step 1
-    -- =========================================================================
-    INSERT INTO HARMONIZER_DEMO.HARMONIZED.HARMONIZED_ITEMS (
-        RAW_ITEM_ID,
-        MASTER_ITEM_ID,
-        ENSEMBLE_CONFIDENCE_SCORE,
-        MATCH_METHOD,
-        MATCH_SOURCE,
-        CREATED_AT,
-        CREATED_BY
-    )
-    SELECT 
-        im.RAW_ITEM_ID,
-        COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID),
-        im.ENSEMBLE_SCORE,
-        'HIGH_CONFIDENCE_DIRECT',
-        'DECOUPLED_PIPELINE_V2',
-        CURRENT_TIMESTAMP(),
-        CURRENT_USER()
-    FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
-    WHERE im.ENSEMBLE_SCORE IS NOT NULL
-      AND im.ENSEMBLE_SCORE >= :v_high_confidence_threshold
-      AND im.STATUS = 'PENDING_REVIEW'
-      AND COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID) IS NOT NULL
-      AND NOT EXISTS (
-          SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.HARMONIZED_ITEMS hi
-          WHERE hi.RAW_ITEM_ID = im.RAW_ITEM_ID
-      );
-    
-    v_to_harmonized_direct := SQLROWCOUNT;
-    v_to_harmonized := v_to_harmonized + v_to_harmonized_direct;
     
     -- =========================================================================
     -- Step 2: Mark routed items in ITEM_MATCHES
@@ -547,8 +541,66 @@ BEGIN
     AND STATUS = 'PENDING_REVIEW';
     
     -- =========================================================================
-    -- Step 3: Route low-confidence items to REVIEW_QUEUE
-    -- Items with scores below threshold need human review
+    -- Step 2.5: Score-based AUTO-REJECT (gated on AUTO_REJECT_ENABLED)
+    -- Items that HAVE a candidate but score below the auto-reject threshold.
+    -- When AUTO_REJECT_ENABLED is false this inserts nothing and low-score
+    -- items fall through to the review queue (Step 3) as before.
+    -- =========================================================================
+    INSERT INTO HARMONIZER_DEMO.HARMONIZED.REJECTED_ITEMS (
+        RAW_ITEM_ID,
+        REJECTION_REASON,
+        REJECTION_DETAILS,
+        SEARCH_MATCHED_ID,
+        COSINE_MATCHED_ID,
+        EDIT_DISTANCE_MATCHED_ID,
+        JACCARD_MATCHED_ID,
+        CREATED_AT,
+        RESOLUTION_STATUS
+    )
+    SELECT 
+        im.RAW_ITEM_ID,
+        'LOW_CONFIDENCE_AUTO',
+        'Ensemble score ' || TO_VARCHAR(im.ENSEMBLE_SCORE) || ' below auto-reject threshold ' || TO_VARCHAR(:v_auto_reject_threshold),
+        im.SEARCH_MATCHED_ID,
+        im.COSINE_MATCHED_ID,
+        im.EDIT_DISTANCE_MATCHED_ID,
+        im.JACCARD_MATCHED_ID,
+        CURRENT_TIMESTAMP(),
+        'PENDING'
+    FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
+    WHERE :v_auto_reject_enabled
+      AND im.ENSEMBLE_SCORE IS NOT NULL
+      AND im.ENSEMBLE_SCORE < :v_auto_reject_threshold
+      AND im.STATUS = 'PENDING_REVIEW'
+      AND COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID) IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.REJECTED_ITEMS ri
+          WHERE ri.RAW_ITEM_ID = im.RAW_ITEM_ID
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.HARMONIZED_ITEMS hi
+          WHERE hi.RAW_ITEM_ID = im.RAW_ITEM_ID
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.REVIEW_QUEUE rq
+          WHERE rq.RAW_ITEM_ID = im.RAW_ITEM_ID
+      );
+    
+    v_to_rejected_auto := SQLROWCOUNT;
+    
+    -- Mark score-based rejected items in ITEM_MATCHES
+    UPDATE HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES
+    SET STATUS = 'REJECTED', UPDATED_AT = CURRENT_TIMESTAMP()
+    WHERE RAW_ITEM_ID IN (
+        SELECT RAW_ITEM_ID FROM HARMONIZER_DEMO.HARMONIZED.REJECTED_ITEMS
+    )
+    AND STATUS = 'PENDING_REVIEW';
+    
+    -- =========================================================================
+    -- Step 3: Route remaining review-band items to REVIEW_QUEUE
+    -- Anything still PENDING_REVIEW with a candidate (not auto-accepted, not
+    -- auto-rejected) needs human review. This is the [reject, accept) band,
+    -- plus high/low items when their respective auto toggles are disabled.
     -- =========================================================================
     INSERT INTO HARMONIZER_DEMO.HARMONIZED.REVIEW_QUEUE (
         RAW_ITEM_ID,
@@ -563,14 +615,14 @@ BEGIN
         COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID),
         im.ENSEMBLE_SCORE,
         CASE 
-            WHEN im.ENSEMBLE_SCORE < 0.40 THEN 'VERY_LOW_CONFIDENCE'
-            ELSE 'LOW_CONFIDENCE'
+            WHEN im.ENSEMBLE_SCORE >= :v_auto_accept_threshold THEN 'AUTO_ACCEPT_DISABLED'
+            WHEN im.ENSEMBLE_SCORE < :v_auto_reject_threshold THEN 'VERY_LOW_CONFIDENCE'
+            ELSE 'NEEDS_REVIEW'
         END as REVIEW_REASON,
         'PENDING',
         CURRENT_TIMESTAMP()
     FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
     WHERE im.ENSEMBLE_SCORE IS NOT NULL
-      AND im.ENSEMBLE_SCORE < :v_auto_accept_threshold
       AND im.STATUS = 'PENDING_REVIEW'
       AND COALESCE(im.CONFIRMED_STANDARD_ID, im.SUGGESTED_STANDARD_ID) IS NOT NULL
       AND NOT EXISTS (
@@ -580,6 +632,10 @@ BEGIN
       AND NOT EXISTS (
           SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.HARMONIZED_ITEMS hi
           WHERE hi.RAW_ITEM_ID = im.RAW_ITEM_ID
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM HARMONIZER_DEMO.HARMONIZED.REJECTED_ITEMS ri
+          WHERE ri.RAW_ITEM_ID = im.RAW_ITEM_ID
       );
     
     v_to_review := SQLROWCOUNT;
@@ -679,8 +735,10 @@ BEGIN
             'to_harmonized', :v_to_harmonized,
             'to_review', :v_to_review,
             'to_rejected', :v_to_rejected,
+            'to_rejected_auto', :v_to_rejected_auto,
             'unrouted', :v_remaining,
-            'auto_accept_threshold', :v_auto_accept_threshold
+            'auto_accept_threshold', :v_auto_accept_threshold,
+            'auto_reject_threshold', :v_auto_reject_threshold
         )
     );
     
@@ -691,6 +749,7 @@ BEGIN
         'to_harmonized', :v_to_harmonized,
         'to_review', :v_to_review,
         'to_rejected', :v_to_rejected,
+        'to_rejected_auto', :v_to_rejected_auto,
         'unrouted', :v_remaining
     );
     
@@ -703,50 +762,6 @@ EXCEPTION
             OBJECT_CONSTRUCT('error', :err_msg)
         );
         -- Re-raise so task fails visibly
-        RAISE;
-END;
-$$;
-
--- ============================================================================
--- COMPUTE_ENSEMBLE_WITH_NOTIFICATION (Wrapper for backward compatibility)
--- Calls the decoupled procedures in sequence for manual/testing use
--- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.COMPUTE_ENSEMBLE_WITH_NOTIFICATION(
-    P_BATCH_ID VARCHAR DEFAULT NULL
-)
-RETURNS VARIANT
-LANGUAGE SQL
-COMMENT = 'Backward-compatible wrapper: calls decoupled procedures in sequence. For Task DAG, use individual tasks instead.'
-EXECUTE AS OWNER
-AS
-$$
-DECLARE
-    v_merge_result VARIANT;
-    v_ensemble_result VARIANT;
-    v_route_result VARIANT;
-BEGIN
-    -- Step 1: Merge staging tables
-    CALL HARMONIZER_DEMO.HARMONIZED.MERGE_STAGING_TABLES();
-    v_merge_result := SQLRESULT;
-    
-    -- Step 2: Compute ensemble scores (pure 4-method ensemble)
-    CALL HARMONIZER_DEMO.HARMONIZED.COMPUTE_ENSEMBLE_SCORES_ONLY();
-    v_ensemble_result := SQLRESULT;
-    
-    -- Step 3: Route items
-    CALL HARMONIZER_DEMO.HARMONIZED.ROUTE_MATCHED_ITEMS();
-    v_route_result := SQLRESULT;
-    
-    RETURN OBJECT_CONSTRUCT(
-        'status', 'complete',
-        'merge', v_merge_result,
-        'ensemble', v_ensemble_result,
-        'routing', v_route_result
-    );
-    
-EXCEPTION
-    WHEN OTHER THEN
-        -- Re-raise so errors are visible (individual procedures log to coordination table)
         RAISE;
 END;
 $$;

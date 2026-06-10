@@ -147,40 +147,6 @@ class DashboardService(BaseService):
 
         return result
 
-    async def get_confidence_data(self) -> dict[str, list[dict[str, Any]]]:
-        """Fetch confidence score distribution data.
-
-        Returns best-match and ensemble confidence bucket distributions
-        from materialized views, with per-key caching.
-
-        Returns:
-            Dict with keys: confidence_best, confidence_ensemble.
-        """
-        db = self.db_name
-
-        best_rows = None
-        ensemble_rows = None
-
-        if self.cache:
-            best_rows = self.cache.get("confidence_best")
-            ensemble_rows = self.cache.get("confidence_ensemble")
-
-        if best_rows is None:
-            best_rows = await self.sf.query(
-                f"SELECT * FROM {db}.ANALYTICS.DT_DASHBOARD_CONFIDENCE_BEST ORDER BY BUCKET"
-            )
-            if self.cache:
-                self.cache.set("confidence_best", best_rows)
-
-        if ensemble_rows is None:
-            ensemble_rows = await self.sf.query(
-                f"SELECT * FROM {db}.ANALYTICS.DT_DASHBOARD_CONFIDENCE_ENSEMBLE ORDER BY BUCKET"
-            )
-            if self.cache:
-                self.cache.set("confidence_ensemble", ensemble_rows)
-
-        return {"confidence_best": best_rows, "confidence_ensemble": ensemble_rows}
-
     async def get_cost_data(self) -> dict[str, Any]:
         """Fetch cost and ROI comparison data.
 

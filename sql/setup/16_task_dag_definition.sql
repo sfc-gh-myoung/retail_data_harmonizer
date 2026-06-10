@@ -3,7 +3,6 @@
 -- Retail Data Harmonizer - Parallel Vector Matching Task DAG
 --
 -- Creates:
---   1. SEND_REVIEW_NOTIFICATION() procedure
 --   2. Method-Level Parallel Task DAG (TRUE parallel vector matching):
 --      - DEDUP_FASTPATH_TASK (root) - dedup + fast-path resolution
 --      - CLASSIFY_UNIQUE_TASK (child) - category+subcategory classification
@@ -45,142 +44,28 @@ USE WAREHOUSE HARMONIZER_DEMO_WH;
 
 -- ============================================================================
 -- Config entries for agentic workflow
+-- (MERGE for idempotent re-run — matches pattern in 02_schema_and_tables.sql)
 -- ============================================================================
-INSERT INTO HARMONIZER_DEMO.ANALYTICS.CONFIG (CONFIG_KEY, CONFIG_VALUE, DESCRIPTION) VALUES
-    ('AGENTIC_ENABLED', 'false', 'Toggle agentic daily pipeline (true/false)'),
-    ('AGENTIC_SCHEDULE', '0 6 * * *', 'CRON schedule for agentic runs (default: 6 AM ET daily)'),
-    ('NOTIFICATIONS_ENABLED', 'false', 'Enable email notifications after pipeline runs (true/false)'),
-    ('NOTIFICATION_THRESHOLD', '50', 'Minimum PENDING_REVIEW items to trigger notification'),
-    ('NOTIFICATION_RECIPIENTS', '', 'Comma-separated email addresses for notifications'),
-    ('NOTIFICATION_INTEGRATION', 'HARMONIZER_PRICING_NOTIFICATION', 'Email integration name for SYSTEM$SEND_EMAIL');
-
--- ============================================================================
--- SEND_REVIEW_NOTIFICATION: Notify pricing team when review queue is large
--- Graceful fallback: logs to PIPELINE_RUNS if email integration not configured
--- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.SEND_REVIEW_NOTIFICATION(
-    P_RUN_ID VARCHAR,
-    P_REVIEW_COUNT INTEGER,
-    P_TOTAL_PROCESSED INTEGER DEFAULT 0,
-    P_AUTO_ACCEPTED INTEGER DEFAULT 0,
-    P_FAST_PATHED INTEGER DEFAULT 0
-)
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Sends email notification when review queue exceeds threshold; graceful fallback to logging'
-EXECUTE AS OWNER
-AS
-$$
-DECLARE
-    v_enabled VARCHAR;
-    v_threshold INTEGER;
-    v_recipients VARCHAR;
-    v_integration VARCHAR;
-    v_subject VARCHAR;
-    v_body VARCHAR;
-    v_started_at TIMESTAMP_NTZ;
-    v_error_message VARCHAR;
-BEGIN
-    v_started_at := CURRENT_TIMESTAMP();
-    
-    -- Check if notifications are enabled BEFORE logging anything
-    SELECT CONFIG_VALUE INTO :v_enabled
-    FROM HARMONIZER_DEMO.ANALYTICS.CONFIG
-    WHERE CONFIG_KEY = 'NOTIFICATIONS_ENABLED';
-    
-    IF (:v_enabled IS NULL OR LOWER(:v_enabled) != 'true') THEN
-        -- Skip entirely - no log entries, no RUNNING steps
-        RETURN '{"notification": "disabled", "reason": "NOTIFICATIONS_ENABLED is false"}';
-    END IF;
-    
-    -- Log step start (only if enabled)
-    CALL HARMONIZER_DEMO.ANALYTICS.LOG_PIPELINE_STEP(
-        :P_RUN_ID, 'SEND_REVIEW_NOTIFICATION', 'STARTED',
-        0, 0, 0, :v_started_at, NULL, NULL, 'SERIAL', NULL
-    );
-
-    -- Load notification config
-    SELECT CONFIG_VALUE::INTEGER INTO :v_threshold
-    FROM HARMONIZER_DEMO.ANALYTICS.CONFIG
-    WHERE CONFIG_KEY = 'NOTIFICATION_THRESHOLD';
-
-    SELECT CONFIG_VALUE INTO :v_recipients
-    FROM HARMONIZER_DEMO.ANALYTICS.CONFIG
-    WHERE CONFIG_KEY = 'NOTIFICATION_RECIPIENTS';
-
-    SELECT CONFIG_VALUE INTO :v_integration
-    FROM HARMONIZER_DEMO.ANALYTICS.CONFIG
-    WHERE CONFIG_KEY = 'NOTIFICATION_INTEGRATION';
-
-    -- Check if notification is warranted
-    IF (:P_REVIEW_COUNT < :v_threshold) THEN
-        CALL HARMONIZER_DEMO.ANALYTICS.LOG_PIPELINE_STEP(
-            :P_RUN_ID, 'SEND_REVIEW_NOTIFICATION', 'COMPLETED',
-            0, 1, 0, :v_started_at, NULL, 'Skipped: below threshold', 'SERIAL', NULL
-        );
-        RETURN '{"notification": "skipped", "reason": "review_count below threshold", "review_count": ' ||
-               :P_REVIEW_COUNT || ', "threshold": ' || :v_threshold || '}';
-    END IF;
-
-    -- Check if recipients are configured
-    IF (:v_recipients IS NULL OR LENGTH(TRIM(:v_recipients)) = 0) THEN
-        UPDATE HARMONIZER_DEMO.ANALYTICS.PIPELINE_RUNS
-        SET ERROR_MESSAGE = COALESCE(ERROR_MESSAGE, '') ||
-            ' [NOTIFICATION_SKIPPED: no recipients configured, ' ||
-            :P_REVIEW_COUNT || ' items pending review]'
-        WHERE RUN_ID = :P_RUN_ID;
-
-        CALL HARMONIZER_DEMO.ANALYTICS.LOG_PIPELINE_STEP(
-            :P_RUN_ID, 'SEND_REVIEW_NOTIFICATION', 'COMPLETED',
-            0, 1, 0, :v_started_at, NULL, 'Skipped: no recipients configured', 'SERIAL', NULL
-        );
-        RETURN '{"notification": "skipped", "reason": "no recipients configured"}';
-    END IF;
-
-    -- Build notification content
-    v_subject := 'Retail Data Harmonizer: ' || :P_REVIEW_COUNT || ' items pending review';
-    v_body := 'Pipeline Run Summary (Run ID: ' || :P_RUN_ID || ')' ||
-              '\n\nTotal Processed: ' || :P_TOTAL_PROCESSED ||
-              '\nAuto-Accepted: ' || :P_AUTO_ACCEPTED ||
-              '\nFast-Pathed: ' || :P_FAST_PATHED ||
-              '\nPending Review: ' || :P_REVIEW_COUNT ||
-              '\n\nPlease review the pending items in the Streamlit dashboard.';
-
-    -- Attempt to send email notification
-    BEGIN
-        CALL SYSTEM$SEND_EMAIL(
-            :v_integration,
-            :v_recipients,
-            :v_subject,
-            :v_body
-        );
-        CALL HARMONIZER_DEMO.ANALYTICS.LOG_PIPELINE_STEP(
-            :P_RUN_ID, 'SEND_REVIEW_NOTIFICATION', 'COMPLETED',
-            1, 0, 0, :v_started_at, NULL, NULL, 'SERIAL', NULL
-        );
-        RETURN '{"notification": "sent", "recipients": "' || :v_recipients ||
-               '", "review_count": ' || :P_REVIEW_COUNT || '}';
-    EXCEPTION
-        WHEN OTHER THEN
-            LET err_code INTEGER := SQLCODE;
-            LET err_msg VARCHAR := SQLERRM;
-            LET notify_err VARCHAR := 'Error: ' || :err_code || ' - ' || :err_msg;
-            UPDATE HARMONIZER_DEMO.ANALYTICS.PIPELINE_RUNS
-            SET ERROR_MESSAGE = COALESCE(ERROR_MESSAGE, '') ||
-                ' [NOTIFICATION_FAILED: ' || :notify_err ||
-                ', ' || :P_REVIEW_COUNT || ' items pending review]'
-            WHERE RUN_ID = :P_RUN_ID;
-
-            CALL HARMONIZER_DEMO.ANALYTICS.LOG_PIPELINE_STEP(
-                :P_RUN_ID, 'SEND_REVIEW_NOTIFICATION', 'FAILED',
-                0, 0, 1, :v_started_at, :notify_err, NULL, 'SERIAL', NULL
-            );
-            RETURN '{"notification": "failed", "error": "' || :notify_err ||
-                   '", "review_count": ' || :P_REVIEW_COUNT || '}';
-    END;
-END;
-$$;
-
+MERGE INTO HARMONIZER_DEMO.ANALYTICS.CONFIG AS target
+USING (
+    SELECT * FROM VALUES
+        ('AGENTIC_ENABLED',              'false',                            'Toggle agentic daily pipeline (true/false)'),
+        ('AGENTIC_SCHEDULE',             '0 6 * * *',                       'CRON schedule for agentic runs (default: 6 AM ET daily)'),
+        ('NOTIFICATIONS_ENABLED',        'false',                            'Enable email notifications after pipeline runs (true/false)'),
+        ('NOTIFICATION_THRESHOLD',       '50',                               'Minimum PENDING_REVIEW items to trigger notification'),
+        ('NOTIFICATION_RECIPIENTS',      '',                                 'Comma-separated email addresses for notifications'),
+        ('NOTIFICATION_INTEGRATION',     'HARMONIZER_PRICING_NOTIFICATION',  'Email integration name for SYSTEM$SEND_EMAIL')
+    AS t(CONFIG_KEY, CONFIG_VALUE, DESCRIPTION)
+) AS source
+ON target.CONFIG_KEY = source.CONFIG_KEY
+WHEN NOT MATCHED THEN
+    INSERT (CONFIG_KEY, CONFIG_VALUE, DESCRIPTION)
+    VALUES (source.CONFIG_KEY, source.CONFIG_VALUE, source.DESCRIPTION)
+WHEN MATCHED THEN
+    UPDATE SET
+        CONFIG_VALUE = source.CONFIG_VALUE,
+        DESCRIPTION  = source.DESCRIPTION,
+        UPDATED_AT   = CURRENT_TIMESTAMP();
 -- ============================================================================
 -- METHOD-LEVEL PARALLEL TASK DAG
 -- Architecture: True parallel execution of vector matching methods
@@ -445,7 +330,6 @@ AS
 -- ============================================================================
 -- Drop any existing finalizer first (Snowflake only allows one finalizer per root task)
 DROP TASK IF EXISTS HARMONIZER_DEMO.HARMONIZED.STAGING_MERGE_TASK;
-DROP TASK IF EXISTS HARMONIZER_DEMO.HARMONIZED.VECTOR_ENSEMBLE_TASK;
 
 CREATE OR REPLACE TASK HARMONIZER_DEMO.HARMONIZED.STAGING_MERGE_TASK
     WAREHOUSE = HARMONIZER_DEMO_WH
@@ -545,8 +429,6 @@ COMMENT = 'Resumes all parallel Task DAG tasks in correct dependency order (deco
 EXECUTE AS OWNER
 AS
 $$
-DECLARE
-    v_error_message VARCHAR;
 BEGIN
     -- Enable FINALIZE task (STAGING_MERGE replaces legacy VECTOR_ENSEMBLE)
     ALTER TASK HARMONIZER_DEMO.HARMONIZED.STAGING_MERGE_TASK RESUME;
@@ -555,7 +437,8 @@ BEGIN
     ALTER TASK HARMONIZER_DEMO.HARMONIZED.ENSEMBLE_SCORING_TASK RESUME;
     ALTER TASK HARMONIZER_DEMO.HARMONIZED.ITEM_ROUTER_TASK RESUME;
     
-    -- Enable analytics maintenance tasks (independent, scheduled)
+    -- Enable maintenance tasks (independent, scheduled)
+    ALTER TASK HARMONIZER_DEMO.HARMONIZED.CLEANUP_COORDINATION_TASK RESUME;
     ALTER TASK HARMONIZER_DEMO.ANALYTICS.REFRESH_TASK_HISTORY_CACHE RESUME;
     ALTER TASK HARMONIZER_DEMO.ANALYTICS.CLEANUP_TASK_EXECUTION_CACHE RESUME;
     ALTER TASK HARMONIZER_DEMO.ANALYTICS.REFRESH_TASK_STATE_CACHE RESUME;
@@ -575,7 +458,7 @@ BEGIN
     -- Enable root task last (triggers the DAG on schedule)
     ALTER TASK HARMONIZER_DEMO.HARMONIZED.DEDUP_FASTPATH_TASK RESUME;
     
-    RETURN '{"status": "enabled", "tasks": ["DEDUP_FASTPATH_TASK", "CLASSIFY_UNIQUE_TASK", "VECTOR_PREP_TASK", "CORTEX_SEARCH_TASK", "COSINE_MATCH_TASK", "EDIT_MATCH_TASK", "JACCARD_MATCH_TASK", "STAGING_MERGE_TASK", "ENSEMBLE_SCORING_TASK", "ITEM_ROUTER_TASK", "REFRESH_TASK_HISTORY_CACHE", "CLEANUP_TASK_EXECUTION_CACHE", "REFRESH_TASK_STATE_CACHE"]}';
+    RETURN '{"status": "enabled", "tasks": ["DEDUP_FASTPATH_TASK", "CLASSIFY_UNIQUE_TASK", "VECTOR_PREP_TASK", "CORTEX_SEARCH_TASK", "COSINE_MATCH_TASK", "EDIT_MATCH_TASK", "JACCARD_MATCH_TASK", "STAGING_MERGE_TASK", "ENSEMBLE_SCORING_TASK", "ITEM_ROUTER_TASK", "CLEANUP_COORDINATION_TASK", "REFRESH_TASK_HISTORY_CACHE", "CLEANUP_TASK_EXECUTION_CACHE", "REFRESH_TASK_STATE_CACHE"]}';
 EXCEPTION
     WHEN OTHER THEN
         LET err_code INTEGER := SQLCODE;
@@ -596,8 +479,6 @@ COMMENT = 'Suspends all parallel Task DAG tasks in correct dependency order (dec
 EXECUTE AS OWNER
 AS
 $$
-DECLARE
-    v_error_message VARCHAR;
 BEGIN
     -- Disable root task first (stops new DAG runs from starting)
     ALTER TASK HARMONIZER_DEMO.HARMONIZED.DEDUP_FASTPATH_TASK SUSPEND;
@@ -634,209 +515,6 @@ EXCEPTION
         LET err_msg VARCHAR := SQLERRM;
         LET disable_err VARCHAR := 'Error: ' || :err_code || ' - ' || :err_msg;
         RETURN '{"status": "error", "message": "' || :disable_err || '"}';
-END;
-$$;
-
--- ============================================================================
--- GET_PIPELINE_TASK_STATUS: Return current state of all pipeline tasks
--- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.GET_PIPELINE_TASK_STATUS()
-RETURNS VARIANT
-LANGUAGE SQL
-COMMENT = 'Returns JSON status of all pipeline tasks including state, schedule, and last run info'
-EXECUTE AS OWNER
-AS
-$$
-DECLARE
-    v_result VARIANT;
-    v_error_message VARCHAR;
-BEGIN
-    WITH all_tasks AS (
-        SELECT 
-            NAME, STATE, SCHEDULE, PREDECESSORS, 
-            ALLOW_OVERLAPPING_EXECUTION, COMMENT
-        FROM TABLE(INFORMATION_SCHEMA.TASK_DEPENDENTS(
-            TASK_NAME => 'HARMONIZER_DEMO.HARMONIZED.DEDUP_FASTPATH_TASK',
-            RECURSIVE => TRUE
-        ))
-    )
-    SELECT OBJECT_CONSTRUCT(
-        'generated_at', CURRENT_TIMESTAMP(),
-        'tasks', ARRAY_AGG(
-            OBJECT_CONSTRUCT(
-                'name', NAME,
-                'state', STATE,
-                'schedule', SCHEDULE,
-                'predecessors', PREDECESSORS,
-                'allow_overlapping_execution', ALLOW_OVERLAPPING_EXECUTION,
-                'comment', COMMENT
-            )
-        )
-    ) INTO :v_result
-    FROM all_tasks;
-    
-    RETURN :v_result;
-EXCEPTION
-    WHEN OTHER THEN
-        LET err_code INTEGER := SQLCODE;
-        LET err_msg VARCHAR := SQLERRM;
-        LET status_err VARCHAR := 'Error: ' || :err_code || ' - ' || :err_msg;
-        RETURN OBJECT_CONSTRUCT('status', 'error', 'message', :status_err);
-END;
-$$;
-
--- ============================================================================
--- PIPELINE_TASK_STATUS_CACHE: Cache table for task status
--- ============================================================================
-CREATE OR REPLACE TABLE HARMONIZER_DEMO.HARMONIZED.PIPELINE_TASK_STATUS_CACHE (
-    TASK_NAME VARCHAR(256),
-    STATE VARCHAR(50),
-    SCHEDULE VARCHAR(256),
-    PREDECESSORS VARCHAR(1000),
-    TASK_COMMENT VARCHAR(1000),
-    WAREHOUSE VARCHAR(256),
-    TASK_TYPE VARCHAR(50),
-    REFRESHED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-);
-
--- ============================================================================
--- REFRESH_PIPELINE_TASK_STATUS: Populates cache table using SHOW TASKS
--- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.REFRESH_PIPELINE_TASK_STATUS()
-RETURNS STRING
-LANGUAGE SQL
-COMMENT = 'Refreshes the pipeline task status cache using SHOW TASKS'
-EXECUTE AS OWNER
-AS
-$$
-BEGIN
-    SHOW TASKS IN SCHEMA HARMONIZER_DEMO.HARMONIZED;
-    
-    DELETE FROM HARMONIZER_DEMO.HARMONIZED.PIPELINE_TASK_STATUS_CACHE;
-    
-    INSERT INTO HARMONIZER_DEMO.HARMONIZED.PIPELINE_TASK_STATUS_CACHE
-        (TASK_NAME, STATE, SCHEDULE, PREDECESSORS, TASK_COMMENT, WAREHOUSE, TASK_TYPE, REFRESHED_AT)
-    SELECT 
-        "name" AS TASK_NAME,
-        "state" AS STATE,
-        "schedule" AS SCHEDULE,
-        "predecessors" AS PREDECESSORS,
-        "comment" AS TASK_COMMENT,
-        "warehouse" AS WAREHOUSE,
-        CASE 
-            WHEN "name" = 'DEDUP_FASTPATH_TASK'     THEN 'Root (Stream-based)'
-            WHEN "name" = 'CLASSIFY_UNIQUE_TASK'   THEN 'Child (After Dedup)'
-            WHEN "name" = 'VECTOR_PREP_TASK'       THEN 'Child (After Classify)'
-            WHEN "name" = 'CORTEX_SEARCH_TASK'     THEN 'Sibling (Parallel)'
-            WHEN "name" = 'COSINE_MATCH_TASK'      THEN 'Sibling (Parallel)'
-            WHEN "name" = 'EDIT_MATCH_TASK'        THEN 'Sibling (Parallel)'
-            WHEN "name" = 'JACCARD_MATCH_TASK'     THEN 'Sibling (Parallel)'
-            WHEN "name" = 'STAGING_MERGE_TASK'     THEN 'Finalizer'
-            WHEN "name" = 'LLM_TIEBREAKER_TASK'    THEN 'Decoupled (Scheduled)'
-            WHEN "name" = 'ENSEMBLE_SCORING_TASK'  THEN 'Decoupled (Scheduled)'
-            WHEN "name" = 'ITEM_ROUTER_TASK'       THEN 'Decoupled (Scheduled)'
-            ELSE 'Other'
-        END AS TASK_TYPE,
-        CURRENT_TIMESTAMP() AS REFRESHED_AT
-    FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-    WHERE "name" IN (
-        'DEDUP_FASTPATH_TASK',
-        'CLASSIFY_UNIQUE_TASK',
-        'VECTOR_PREP_TASK',
-        'CORTEX_SEARCH_TASK',
-        'COSINE_MATCH_TASK',
-        'EDIT_MATCH_TASK',
-        'JACCARD_MATCH_TASK',
-        'STAGING_MERGE_TASK',
-        'LLM_TIEBREAKER_TASK',
-        'ENSEMBLE_SCORING_TASK',
-        'ITEM_ROUTER_TASK'
-    );
-    
-    RETURN 'Refreshed ' || (SELECT COUNT(*) FROM HARMONIZER_DEMO.HARMONIZED.PIPELINE_TASK_STATUS_CACHE) || ' tasks';
-END;
-$$;
-
--- ============================================================================
--- V_PIPELINE_TASK_STATUS: View for current task states
--- ============================================================================
-CREATE OR REPLACE VIEW HARMONIZER_DEMO.HARMONIZED.V_PIPELINE_TASK_STATUS AS
-SELECT 
-    TASK_NAME,
-    STATE,
-    SCHEDULE,
-    PREDECESSORS,
-    TASK_COMMENT AS COMMENT,
-    WAREHOUSE,
-    TASK_TYPE,
-    REFRESHED_AT
-FROM HARMONIZER_DEMO.HARMONIZED.PIPELINE_TASK_STATUS_CACHE;
-
--- ============================================================================
--- COMPUTE_ENSEMBLE_WITH_NOTIFICATION: Wrapper for finalizer task
--- Calls ensemble procedure then sends notification
--- ============================================================================
-CREATE OR REPLACE PROCEDURE HARMONIZER_DEMO.HARMONIZED.COMPUTE_ENSEMBLE_WITH_NOTIFICATION(
-    P_BATCH_ID VARCHAR
-)
-RETURNS VARIANT
-LANGUAGE SQL
-COMMENT = 'Computes ensemble scores then sends review notification if threshold exceeded'
-EXECUTE AS OWNER
-AS
-$$
-DECLARE
-    v_run_id VARCHAR;
-    v_review_count INTEGER;
-    v_total_processed INTEGER;
-    v_auto_accepted INTEGER;
-    v_fast_pathed INTEGER;
-BEGIN
-    -- CRITICAL FIX: Get run_id from parallel tasks via VECTOR_PREP, NOT a new UUID!
-    -- The inner procedure checks CHECK_ALL_PARALLEL_TASKS_DONE(run_id), and if we pass
-    -- a fresh UUID, it finds no tasks and skips LLM processing.
-    v_run_id := HARMONIZER_DEMO.HARMONIZED.GET_LATEST_RUN_ID('VECTOR_PREP');
-    IF (v_run_id IS NULL) THEN
-        v_run_id := UUID_STRING();  -- Fallback only if no VECTOR_PREP task exists
-    END IF;
-    
-    -- Run the ensemble scoring with the inherited run_id
-    CALL HARMONIZER_DEMO.HARMONIZED.COMPUTE_ENSEMBLE_WITH_CONDITIONAL_LLM(:P_BATCH_ID, :v_run_id);
-    
-    -- Gather stats for notification
-    SELECT COUNT(*) INTO :v_review_count
-    FROM HARMONIZER_DEMO.RAW.RAW_RETAIL_ITEMS WHERE MATCH_STATUS = 'PENDING_REVIEW';
-    
-    SELECT COUNT(*) INTO :v_total_processed
-    FROM HARMONIZER_DEMO.RAW.RAW_RETAIL_ITEMS WHERE MATCH_STATUS != 'PENDING';
-    
-    SELECT COUNT(*) INTO :v_auto_accepted
-    FROM HARMONIZER_DEMO.RAW.RAW_RETAIL_ITEMS WHERE MATCH_STATUS IN ('AUTO_ACCEPTED', 'AUTO_MATCHED');
-    
-    SELECT COUNT(*) INTO :v_fast_pathed
-    FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES WHERE MATCH_METHOD = 'FAST_PATH';
-    
-    -- Send notification (graceful fallback if not configured)
-    CALL HARMONIZER_DEMO.HARMONIZED.SEND_REVIEW_NOTIFICATION(
-        :v_run_id, :v_review_count, :v_total_processed, :v_auto_accepted, :v_fast_pathed
-    );
-    
-    RETURN OBJECT_CONSTRUCT(
-        'run_id', :v_run_id,
-        'batch_id', :P_BATCH_ID,
-        'status', 'complete',
-        'review_count', :v_review_count,
-        'total_processed', :v_total_processed
-    );
-EXCEPTION
-    WHEN OTHER THEN
-        LET err_msg VARCHAR := SQLERRM;
-        RETURN OBJECT_CONSTRUCT(
-            'run_id', :v_run_id,
-            'batch_id', :P_BATCH_ID,
-            'status', 'error',
-            'error', :err_msg
-        );
 END;
 $$;
 

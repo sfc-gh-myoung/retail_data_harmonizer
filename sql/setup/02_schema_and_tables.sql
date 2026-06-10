@@ -429,14 +429,24 @@ MERGE INTO HARMONIZER_DEMO.ANALYTICS.CONFIG AS target
 USING (
     SELECT * FROM VALUES
         -- Threshold Configuration
-        ('AUTO_ACCEPT_THRESHOLD', '0.80', 'NUMBER', 'THRESHOLD',
-         'Hybrid score threshold for automatic acceptance'),
-        ('REVIEW_THRESHOLD', '0.70', 'NUMBER', 'THRESHOLD',
-         'Hybrid score threshold for human review queue'),
+        ('AUTO_ACCEPT_THRESHOLD', '0.75', 'NUMBER', 'THRESHOLD',
+         'Ensemble score at/above which matches are auto-accepted (gated on AUTO_ACCEPT_ENABLED)'),
+        ('AUTO_REJECT_THRESHOLD', '0.45', 'NUMBER', 'THRESHOLD',
+         'Ensemble score below which matches are auto-rejected (gated on AUTO_REJECT_ENABLED). Review band is [reject, accept).'),
         ('MIN_CANDIDATE_SCORE', '0.50', 'NUMBER', 'THRESHOLD',
          'Minimum score to include a candidate in results'),
         ('CONFIDENCE_BOOST_THRESHOLD', '3', 'NUMBER', 'THRESHOLD',
          'Number of methods that must agree for confidence boost'),
+        
+        -- Automation toggles and Settings UI values
+        ('AUTO_ACCEPT_ENABLED', 'true', 'BOOLEAN', 'AUTOMATION',
+         'Automatically accept matches at/above AUTO_ACCEPT_THRESHOLD'),
+        ('AUTO_REJECT_ENABLED', 'false', 'BOOLEAN', 'AUTOMATION',
+         'Automatically reject matches below AUTO_REJECT_THRESHOLD'),
+        ('MIN_AGREEMENT_LEVEL', '3', 'NUMBER', 'AUTOMATION',
+         'Minimum number of matchers that must agree for auto-decisions (1-4)'),
+        ('CACHE_ENABLED', 'true', 'BOOLEAN', 'PERFORMANCE',
+         'Enable caching for repeated queries'),
         
         -- Scoring Weights (normalized at runtime to sum to 1.0)
         -- Weights based on raw score analysis: SEARCH dominates 88.5% of matches with highest avg score (0.73)

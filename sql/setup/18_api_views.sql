@@ -34,7 +34,7 @@ USE DATABASE HARMONIZER_DEMO;
 USE WAREHOUSE HARMONIZER_DEMO_WH;
 
 -- ============================================================================
--- Materialized view: Dashboard KPIs
+-- View: Dashboard KPIs
 -- ============================================================================
 -- Replaces expensive COUNT(*) aggregations on RAW_RETAIL_ITEMS
 -- Uses RAW_RETAIL_ITEMS.MATCH_STATUS as authoritative source (pipeline updates that table)
@@ -62,7 +62,7 @@ FROM (
 );
 
 -- ============================================================================
--- Materialized view: Source system breakdown
+-- View: Source system breakdown
 -- ============================================================================
 CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_DASHBOARD_SOURCES AS
 SELECT 
@@ -83,7 +83,7 @@ GROUP BY ri.SOURCE_SYSTEM,
     END;
 
 -- ============================================================================
--- Materialized view: Category match rates
+-- View: Category match rates
 -- Shows ALL taxonomy categories, including those with 0 items
 -- ============================================================================
 CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_DASHBOARD_CATEGORIES AS
@@ -114,7 +114,7 @@ LEFT JOIN (
 ) counts ON ct.CATEGORY = counts.CATEGORY;
 
 -- ============================================================================
--- Materialized view: Confidence distribution (Best Match Score)
+-- View: Confidence distribution (Best Match Score)
 -- Best Match Score = highest individual method score (search, cosine, edit)
 -- ============================================================================
 CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_DASHBOARD_CONFIDENCE_BEST AS
@@ -142,7 +142,7 @@ FROM (
 GROUP BY BUCKET;
 
 -- ============================================================================
--- Materialized view: Confidence distribution (Ensemble Score)
+-- View: Confidence distribution (Ensemble Score)
 -- Ensemble Score = ENSEMBLE_SCORE (normalized weighted average × agreement multiplier)
 -- Formula: base_score × agreement_multiplier (4-way=1.20, 3-way=1.15, 2-way=1.10)
 -- Pure 4-method ensemble scoring: Cortex Search, Cosine, Edit Distance, Jaccard
@@ -162,7 +162,7 @@ WHERE ENSEMBLE_SCORE IS NOT NULL
 GROUP BY BUCKET;
 
 -- ============================================================================
--- Materialized view: Scale metrics
+-- View: Scale metrics
 -- ============================================================================
 CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_DASHBOARD_SCALE AS
 SELECT
@@ -458,8 +458,7 @@ SELECT
     QUERY_TEXT,
     RUN_ID,
     ATTEMPT_NUMBER
-FROM HARMONIZER_DEMO.ANALYTICS.TASK_EXECUTION_CACHE
-ORDER BY SCHEDULED_TIME DESC;
+FROM HARMONIZER_DEMO.ANALYTICS.TASK_EXECUTION_CACHE;
 
 -- ============================================================================
 -- Phase 7: Optimization Metrics View
@@ -634,7 +633,6 @@ SELECT
         WHEN TASK_NAME = 'EDIT_MATCH_TASK' THEN 'edit_distance'
         WHEN TASK_NAME = 'JACCARD_MATCH_TASK' THEN 'jaccard'
         WHEN TASK_NAME = 'VECTOR_PREP_TASK' THEN 'prep'
-        WHEN TASK_NAME = 'VECTOR_ENSEMBLE_TASK' THEN 'ensemble'
         WHEN TASK_NAME = 'DEDUP_FASTPATH_TASK' THEN 'dedup'
         ELSE 'other'
     END AS TASK_TYPE,
@@ -662,7 +660,7 @@ WITH run_batches AS (
         SUM(CASE WHEN TASK_NAME = 'EDIT_MATCH_TASK' THEN DURATION_SECONDS ELSE 0 END) AS EDIT_SECONDS,
         SUM(CASE WHEN TASK_NAME = 'JACCARD_MATCH_TASK' THEN DURATION_SECONDS ELSE 0 END) AS JACCARD_SECONDS,
         SUM(CASE WHEN TASK_NAME = 'VECTOR_PREP_TASK' THEN DURATION_SECONDS ELSE 0 END) AS PREP_SECONDS,
-        SUM(CASE WHEN TASK_NAME = 'VECTOR_ENSEMBLE_TASK' THEN DURATION_SECONDS ELSE 0 END) AS ENSEMBLE_SECONDS,
+        SUM(CASE WHEN TASK_NAME = 'STAGING_MERGE_TASK' THEN DURATION_SECONDS ELSE 0 END) AS ENSEMBLE_SECONDS,
         COUNT(DISTINCT QUERY_ID) AS TASK_COUNT,
         COUNT(CASE WHEN STATE = 'FAILED' THEN 1 END) AS FAILED_COUNT
     FROM HARMONIZER_DEMO.ANALYTICS.V_TASK_EXECUTION_METRICS
@@ -818,7 +816,9 @@ LEFT JOIN active_batch ab ON 1=1;
 -- Shows item counts at each processing stage for pipeline health monitoring
 -- Pure 4-method ensemble: Cortex Search, Cosine, Edit Distance, Jaccard
 -- ============================================================================
-CREATE OR REPLACE VIEW HARMONIZER_DEMO.HARMONIZED.V_PIPELINE_ITEM_STATUS AS
+CREATE OR REPLACE VIEW HARMONIZER_DEMO.HARMONIZED.V_PIPELINE_ITEM_STATUS
+COMMENT = 'Shows item counts at each processing stage for 4-method ensemble pipeline monitoring'
+AS
 SELECT 
     CASE 
         WHEN CORTEX_SEARCH_SCORE IS NULL 
@@ -843,8 +843,26 @@ SELECT
     MAX(UPDATED_AT) AS NEWEST_UPDATE,
     AVG(DATEDIFF('minute', CREATED_AT, CURRENT_TIMESTAMP())) AS AVG_AGE_MINUTES
 FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES
-GROUP BY 1
-ORDER BY 1;
+GROUP BY PROCESSING_STAGE
+ORDER BY PROCESSING_STAGE;
 
-COMMENT ON VIEW HARMONIZER_DEMO.HARMONIZED.V_PIPELINE_ITEM_STATUS IS 
-    'Shows item counts at each processing stage for 4-method ensemble pipeline monitoring';
+
+-- ============================================================================
+-- V_ORPHANED_ITEMS: Read-only metric — PENDING items with no ensemble score
+-- These items entered the pipeline but never completed matching.
+-- The root task (DEDUP_FASTPATH_TASK) runs every minute and reprocesses any
+-- PENDING item, so orphans self-heal. This view surfaces the count for
+-- dashboard visibility only.
+-- ============================================================================
+CREATE OR REPLACE VIEW HARMONIZER_DEMO.ANALYTICS.V_ORPHANED_ITEMS AS
+SELECT
+    COUNT(*) AS orphan_count,
+    CURRENT_TIMESTAMP() AS refreshed_at
+FROM HARMONIZER_DEMO.RAW.RAW_RETAIL_ITEMS ri
+WHERE ri.MATCH_STATUS = 'PENDING'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM HARMONIZER_DEMO.HARMONIZED.ITEM_MATCHES im
+      WHERE im.RAW_ITEM_ID = ri.ITEM_ID
+        AND im.ENSEMBLE_SCORE IS NOT NULL
+  );

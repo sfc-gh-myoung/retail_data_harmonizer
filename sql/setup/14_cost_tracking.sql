@@ -63,13 +63,27 @@ CREATE OR REPLACE TABLE HARMONIZER_DEMO.ANALYTICS.COST_TRACKING (
 
 -- ============================================================================
 -- Default configuration for cost tracking
+-- (MERGE for idempotent re-run — matches pattern in 02_schema_and_tables.sql)
 -- ============================================================================
-INSERT INTO HARMONIZER_DEMO.ANALYTICS.CONFIG (CONFIG_KEY, CONFIG_VALUE, DESCRIPTION) VALUES
-    ('CREDIT_RATE_USD', '3.00', 'Snowflake credit cost in USD for cost estimation'),
-    ('BASELINE_WEEKLY_COST', '16000.00', 'Customer current weekly cost for matching ($16K/week)'),
-    ('BASELINE_ACCURACY', '0.75', 'Customer current matching accuracy (75%)'),
-    ('MANUAL_HOURLY_RATE', '50.00', 'Manual labor hourly rate for ROI calculations'),
-    ('MANUAL_MINUTES_PER_ITEM', '3.0', 'Minutes of manual effort per item for baseline comparison');
+MERGE INTO HARMONIZER_DEMO.ANALYTICS.CONFIG AS target
+USING (
+    SELECT * FROM VALUES
+        ('CREDIT_RATE_USD',          '3.00',     'Snowflake credit cost in USD for cost estimation'),
+        ('BASELINE_WEEKLY_COST',     '16000.00', 'Customer current weekly cost for matching ($16K/week)'),
+        ('BASELINE_ACCURACY',        '0.75',     'Customer current matching accuracy (75%)'),
+        ('MANUAL_HOURLY_RATE',       '50.00',    'Manual labor hourly rate for ROI calculations'),
+        ('MANUAL_MINUTES_PER_ITEM',  '3.0',      'Minutes of manual effort per item for baseline comparison')
+    AS t(CONFIG_KEY, CONFIG_VALUE, DESCRIPTION)
+) AS source
+ON target.CONFIG_KEY = source.CONFIG_KEY
+WHEN NOT MATCHED THEN
+    INSERT (CONFIG_KEY, CONFIG_VALUE, DESCRIPTION)
+    VALUES (source.CONFIG_KEY, source.CONFIG_VALUE, source.DESCRIPTION)
+WHEN MATCHED THEN
+    UPDATE SET
+        CONFIG_VALUE = source.CONFIG_VALUE,
+        DESCRIPTION  = source.DESCRIPTION,
+        UPDATED_AT   = CURRENT_TIMESTAMP();
 
 -- ============================================================================
 -- Record pipeline run start/completion with cost tracking

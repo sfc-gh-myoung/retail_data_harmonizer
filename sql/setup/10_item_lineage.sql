@@ -164,3 +164,8 @@ BEGIN
     RETURN TABLE(res);
 END;
 $$;
+
+SELECT '10_item_lineage setup complete!' AS status;
+
+
+SELECT '10_item_lineage setup complete!' AS status;

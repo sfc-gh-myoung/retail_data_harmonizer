@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AlertTriangle, RotateCcw, RefreshCw } from 'lucide-react'
+import { RotateCcw, Save } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,13 @@ import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,8 +29,24 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { PageHeader } from '@/components/page-header'
-import { useSettings, useUpdateSettings, useResetPipeline, useReEvaluate, type Settings } from './hooks/use-settings'
+import {
+  useSettings,
+  useResetPipeline,
+  useSaveSettings,
+  type Settings,
+  type SettingsUpdate,
+} from './hooks/use-settings'
 import { getErrorMessage } from '@/lib/api'
+
+// Strip the non-editable cost section to produce the editable form shape.
+function toForm(data: Settings): SettingsUpdate {
+  return {
+    weights: { ...data.weights },
+    thresholds: { ...data.thresholds },
+    performance: { ...data.performance },
+    automation: { ...data.automation },
+  }
+}
 
 // Section skeletons
 function WeightsSkeleton() {
@@ -57,20 +81,7 @@ function ThresholdsSkeleton() {
         <Skeleton className="h-4 w-64 mt-1" />
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="space-y-2">
-              <div className="flex justify-between">
-                <div>
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-48 mt-1" />
-                </div>
-                <Skeleton className="h-4 w-10" />
-              </div>
-              <Skeleton className="h-2 w-full" />
-            </div>
-          ))}
-        </div>
+        <Skeleton className="h-2 w-full" />
       </CardContent>
     </Card>
   )
@@ -127,70 +138,96 @@ function DangerZoneSkeleton() {
 
 export function Settings() {
   const { data, isLoading, error, refetch, isFetching } = useSettings()
-  const updateSettings = useUpdateSettings()
   const resetPipeline = useResetPipeline()
-  const reEvaluate = useReEvaluate()
+  const saveSettings = useSaveSettings()
 
-  const [localSettings, setLocalSettings] = useState<Partial<Settings>>({})
-
-  const handleWeightChange = (key: keyof Settings['weights'], value: number) => {
-    const newWeights = { ...localSettings.weights, [key]: value }
-    setLocalSettings({ ...localSettings, weights: newWeights as Settings['weights'] })
+  const [form, setForm] = useState<SettingsUpdate | null>(data ? toForm(data) : null)
+  const [prevData, setPrevData] = useState(data)
+  // Seed local form whenever fresh server data arrives (setState-during-render, no effect needed).
+  if (data !== prevData) {
+    setPrevData(data)
+    if (data) setForm(toForm(data))
   }
 
-  const handleThresholdChange = (key: keyof Settings['thresholds'], value: number) => {
-    const newThresholds = { ...localSettings.thresholds, [key]: value }
-    setLocalSettings({ ...localSettings, thresholds: newThresholds as Settings['thresholds'] })
-  }
+  const isDirty =
+    !!data && !!form && JSON.stringify(form) !== JSON.stringify(toForm(data))
+
+  const setWeight = (key: keyof SettingsUpdate['weights'], value: number) =>
+    setForm((f) => (f ? { ...f, weights: { ...f.weights, [key]: value } } : f))
+
+  const setBand = (lo: number, hi: number) =>
+    setForm((f) =>
+      f
+        ? {
+            ...f,
+            thresholds: {
+              autoAccept: hi,
+              reject: lo,
+              reviewMin: lo,
+              reviewMax: hi,
+            },
+          }
+        : f
+    )
+
+  const setPerf = (
+    key: keyof SettingsUpdate['performance'],
+    value: number | boolean
+  ) =>
+    setForm((f) =>
+      f ? { ...f, performance: { ...f.performance, [key]: value } } : f
+    )
+
+  const setAutomation = (
+    key: keyof SettingsUpdate['automation'],
+    value: number | boolean
+  ) =>
+    setForm((f) =>
+      f ? { ...f, automation: { ...f.automation, [key]: value } } : f
+    )
 
   const handleSave = () => {
-    if (Object.keys(localSettings).length > 0) {
-      updateSettings.mutate(localSettings, {
-        onSuccess: () => setLocalSettings({}),
-      })
-    }
+    if (!form) return
+    saveSettings.mutate(form, {
+      onSuccess: () => toast.success('Settings saved'),
+      onError: (e) => toast.error(getErrorMessage(e)),
+    })
   }
 
-  const weights = data ? { ...data.weights, ...localSettings.weights } : null
-  const thresholds = data ? { ...data.thresholds, ...localSettings.thresholds } : null
-  const hasChanges = Object.keys(localSettings).length > 0
-
-  // Always render page structure - sections handle their own loading states
   return (
     <div className="space-y-6">
-      {/* Header with refresh button (no auto-refresh for forms) */}
       <PageHeader
         title="Settings"
         storageKey="settings-refresh"
         isFetching={isLoading || isFetching}
         onRefresh={() => refetch()}
         showAutoRefresh={false}
-      >
-        {hasChanges && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setLocalSettings({})}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        )}
-      </PageHeader>
+      />
 
-      {/* Error state */}
+      {/* Save bar */}
+      <div className="flex items-center justify-end gap-3">
+        {isDirty && (
+          <span className="text-sm text-muted-foreground">Unsaved changes</span>
+        )}
+        <Button
+          onClick={handleSave}
+          disabled={!isDirty || saveSettings.isPending}
+        >
+          <Save className="h-4 w-4 mr-2" />
+          {saveSettings.isPending ? 'Saving…' : 'Save Changes'}
+        </Button>
+      </div>
+
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>
-            {getErrorMessage(error)}
-          </AlertDescription>
+          <AlertDescription>{getErrorMessage(error)}</AlertDescription>
         </Alert>
       )}
 
       {/* Signal Weights */}
-      {isLoading ? (
+      {isLoading || !form ? (
         <WeightsSkeleton />
-      ) : weights && data ? (
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle>Primary Signal Weights</CardTitle>
@@ -202,75 +239,79 @@ export function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <WeightSlider
                 label="Cortex Search"
-                value={weights.cortexSearch}
-                onChange={(v) => handleWeightChange('cortexSearch', v)}
+                value={form.weights.cortexSearch}
+                onChange={(v) => setWeight('cortexSearch', v)}
               />
               <WeightSlider
                 label="Cosine Similarity"
-                value={weights.cosine}
-                onChange={(v) => handleWeightChange('cosine', v)}
+                value={form.weights.cosine}
+                onChange={(v) => setWeight('cosine', v)}
               />
               <WeightSlider
                 label="Edit Distance"
-                value={weights.editDistance}
-                onChange={(v) => handleWeightChange('editDistance', v)}
+                value={form.weights.editDistance}
+                onChange={(v) => setWeight('editDistance', v)}
               />
               <WeightSlider
                 label="Jaccard"
-                value={weights.jaccard}
-                onChange={(v) => handleWeightChange('jaccard', v)}
+                value={form.weights.jaccard}
+                onChange={(v) => setWeight('jaccard', v)}
               />
             </div>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
-      {/* Thresholds */}
-      {isLoading ? (
+      {/* Thresholds (derived review band via dual-handle range) */}
+      {isLoading || !form ? (
         <ThresholdsSkeleton />
-      ) : thresholds && data ? (
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle>Score Thresholds</CardTitle>
             <CardDescription>
-              Configure automatic acceptance and rejection thresholds
+              Drag the handles to set the auto-reject and auto-accept boundaries.
+              Scores between them go to manual review.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ThresholdSlider
-                label="Auto-Accept Threshold"
-                value={thresholds.autoAccept}
-                onChange={(v) => handleThresholdChange('autoAccept', v)}
-                description="Matches above this score are automatically accepted"
-              />
-              <ThresholdSlider
-                label="Reject Threshold"
-                value={thresholds.reject}
-                onChange={(v) => handleThresholdChange('reject', v)}
-                description="Matches below this score are automatically rejected"
-              />
-              <ThresholdSlider
-                label="Review Range (Min)"
-                value={thresholds.reviewMin}
-                onChange={(v) => handleThresholdChange('reviewMin', v)}
-                description="Lower bound for manual review queue"
-              />
-              <ThresholdSlider
-                label="Review Range (Max)"
-                value={thresholds.reviewMax}
-                onChange={(v) => handleThresholdChange('reviewMax', v)}
-                description="Upper bound for manual review queue"
-              />
+          <CardContent className="space-y-4">
+            <div className="flex justify-between text-sm">
+              <span>
+                Auto-Reject &lt;{' '}
+                <span className="font-medium">
+                  {Math.round(form.thresholds.reject * 100)}%
+                </span>
+              </span>
+              <span className="text-muted-foreground">
+                Review {Math.round(form.thresholds.reject * 100)}% –{' '}
+                {Math.round(form.thresholds.autoAccept * 100)}%
+              </span>
+              <span>
+                Auto-Accept ≥{' '}
+                <span className="font-medium">
+                  {Math.round(form.thresholds.autoAccept * 100)}%
+                </span>
+              </span>
             </div>
+            <Slider
+              value={[
+                Math.round(form.thresholds.reject * 100),
+                Math.round(form.thresholds.autoAccept * 100),
+              ]}
+              min={0}
+              max={100}
+              step={5}
+              minStepsBetweenThumbs={1}
+              onValueChange={([lo, hi]) => setBand(lo / 100, hi / 100)}
+            />
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
       {/* Performance */}
-      {isLoading ? (
+      {isLoading || !form ? (
         <PerformanceSkeleton />
-      ) : data ? (
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle>Performance Settings</CardTitle>
@@ -282,8 +323,10 @@ export function Settings() {
                 <Input
                   id="batchSize"
                   type="number"
-                  value={data.performance.batchSize}
-                  readOnly
+                  value={form.performance.batchSize}
+                  onChange={(e) =>
+                    setPerf('batchSize', Number(e.target.value) || 0)
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -291,8 +334,10 @@ export function Settings() {
                 <Input
                   id="parallelism"
                   type="number"
-                  value={data.performance.parallelism}
-                  readOnly
+                  value={form.performance.parallelism}
+                  onChange={(e) =>
+                    setPerf('parallelism', Number(e.target.value) || 0)
+                  }
                 />
               </div>
             </div>
@@ -303,16 +348,19 @@ export function Settings() {
                   Enable caching for repeated queries
                 </p>
               </div>
-              <Switch checked={data.performance.cacheEnabled} disabled />
+              <Switch
+                checked={form.performance.cacheEnabled}
+                onCheckedChange={(v) => setPerf('cacheEnabled', v)}
+              />
             </div>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
       {/* Automation */}
-      {isLoading ? (
+      {isLoading || !form ? (
         <PerformanceSkeleton />
-      ) : data ? (
+      ) : (
         <Card>
           <CardHeader>
             <CardTitle>Automation Settings</CardTitle>
@@ -325,7 +373,10 @@ export function Settings() {
                   Automatically accept high-confidence matches
                 </p>
               </div>
-              <Switch checked={data.automation.autoAcceptEnabled} disabled />
+              <Switch
+                checked={form.automation.autoAcceptEnabled}
+                onCheckedChange={(v) => setAutomation('autoAcceptEnabled', v)}
+              />
             </div>
             <div className="flex items-center justify-between">
               <div>
@@ -334,11 +385,39 @@ export function Settings() {
                   Automatically reject low-confidence matches
                 </p>
               </div>
-              <Switch checked={data.automation.autoRejectEnabled} disabled />
+              <Switch
+                checked={form.automation.autoRejectEnabled}
+                onCheckedChange={(v) => setAutomation('autoRejectEnabled', v)}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Min Agreement Level</Label>
+                <p className="text-sm text-muted-foreground">
+                  Minimum matchers that must agree for auto-decisions
+                </p>
+              </div>
+              <Select
+                value={String(form.automation.minAgreementLevel)}
+                onValueChange={(v) =>
+                  setAutomation('minAgreementLevel', Number(v))
+                }
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
       <Separator />
 
@@ -390,42 +469,6 @@ export function Settings() {
 
             <Separator />
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Re-evaluate All Matches</p>
-                <p className="text-sm text-muted-foreground">
-                  Recalculate scores for all matches using current settings
-                </p>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Re-evaluate
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      <AlertTriangle className="h-5 w-5 inline mr-2 text-destructive" />
-                      Re-evaluate All Matches?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will recalculate scores for all matches. This may change the status of previously reviewed items and will incur additional API costs.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => reEvaluate.mutate()}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Re-evaluate All
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
           </CardContent>
         </Card>
       )}
@@ -445,36 +488,6 @@ function WeightSlider({ label, value, onChange }: WeightSliderProps) {
       <div className="flex justify-between">
         <Label>{label}</Label>
         <span className="text-sm text-muted-foreground">{value.toFixed(2)}</span>
-      </div>
-      <Slider
-        value={[value]}
-        min={0}
-        max={1}
-        step={0.05}
-        onValueChange={([v]) => onChange(v)}
-      />
-    </div>
-  )
-}
-
-interface ThresholdSliderProps {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  description?: string
-}
-
-function ThresholdSlider({ label, value, onChange, description }: ThresholdSliderProps) {
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <div>
-          <Label>{label}</Label>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
-        </div>
-        <span className="text-sm font-medium">{(value * 100).toFixed(0)}%</span>
       </div>
       <Slider
         value={[value]}

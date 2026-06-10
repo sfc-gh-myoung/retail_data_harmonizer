@@ -58,7 +58,6 @@ class MatchItem(BaseModel):
     jaccardScore: float = Field(..., description="Jaccard similarity score (0-1)")
     ensembleScore: float = Field(..., description="Weighted ensemble score (0-100)")
     maxRawScore: float = Field(..., description="Highest individual algorithm score (0-1)")
-    score: float = Field(..., description="Final display score (0-100)")
     matchSource: str = Field(..., description="Winning algorithm: CORTEX_SEARCH, COSINE, EDIT, JACCARD")
     matchMethod: str = Field(..., description="How match was determined: ENSEMBLE, SINGLE_WINNER")
     agreementLevel: int = Field(..., description="Number of algorithms agreeing on match (1-4)")

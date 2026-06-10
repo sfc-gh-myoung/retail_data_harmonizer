@@ -22,12 +22,11 @@ vi.mock('@/components/ui/slider', () => ({
 
 vi.mock('./hooks/use-settings', () => ({
   useSettings: vi.fn(),
-  useUpdateSettings: vi.fn(),
   useResetPipeline: vi.fn(),
-  useReEvaluate: vi.fn(),
 }))
 
-import { useSettings, useUpdateSettings, useResetPipeline, useReEvaluate } from './hooks/use-settings'
+import { useSettings, useResetPipeline } from './hooks/use-settings'
+
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -69,21 +68,12 @@ const mockSettingsData = {
 }
 
 describe('Settings', () => {
-  const mockUpdateMutate = vi.fn()
   const mockResetPipelineMutate = vi.fn()
-  const mockReEvaluateMutate = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useUpdateSettings).mockReturnValue({
-      mutate: mockUpdateMutate,
-      isPending: false,
-    } as any)
     vi.mocked(useResetPipeline).mockReturnValue({
       mutate: mockResetPipelineMutate,
-    } as any)
-    vi.mocked(useReEvaluate).mockReturnValue({
-      mutate: mockReEvaluateMutate,
     } as any)
   })
 
@@ -196,7 +186,6 @@ describe('Settings', () => {
     
     expect(screen.getByText('Danger Zone')).toBeInTheDocument()
     expect(screen.getByText('Reset Pipeline')).toBeInTheDocument()
-    expect(screen.getByText('Re-evaluate All Matches')).toBeInTheDocument()
   })
 
   it('renders reset button in danger zone', () => {
@@ -209,30 +198,6 @@ describe('Settings', () => {
     renderWithProviders(<Settings />)
     
     expect(screen.getByRole('button', { name: /reset/i })).toBeInTheDocument()
-  })
-
-  it('renders re-evaluate button in danger zone', () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    expect(screen.getByRole('button', { name: /re-evaluate/i })).toBeInTheDocument()
-  })
-
-  it('does not show save button when no changes made', () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
   })
 
   it('opens reset confirmation dialog when reset button clicked', async () => {
@@ -248,22 +213,6 @@ describe('Settings', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Reset Pipeline?')).toBeInTheDocument()
-    })
-  })
-
-  it('opens re-evaluate confirmation dialog when re-evaluate button clicked', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    fireEvent.click(screen.getByRole('button', { name: /re-evaluate/i }))
-    
-    await waitFor(() => {
-      expect(screen.getByText('Re-evaluate All Matches?')).toBeInTheDocument()
     })
   })
 
@@ -293,93 +242,6 @@ describe('Settings', () => {
     expect(screen.getByText('Score Thresholds')).toBeInTheDocument()
   })
 
-  it('shows save and cancel buttons when weight slider changes', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    // Find the cortexSearch slider and change it
-    const sliders = screen.getAllByRole('slider')
-    expect(sliders.length).toBeGreaterThan(0)
-    
-    // Simulate slider change using our mocked input
-    fireEvent.change(sliders[0], { target: { value: '0.5' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
-    })
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
-  })
-
-  it('clears local changes when cancel button clicked', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    const sliders = screen.getAllByRole('slider')
-    fireEvent.change(sliders[0], { target: { value: '0.5' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
-    })
-    
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
-    })
-  })
-
-  it('calls updateSettings.mutate when save button clicked', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    const sliders = screen.getAllByRole('slider')
-    fireEvent.change(sliders[0], { target: { value: '0.5' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
-    })
-    
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
-    
-    expect(mockUpdateMutate).toHaveBeenCalled()
-  })
-
-  it('shows saving state when update is pending', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-    vi.mocked(useUpdateSettings).mockReturnValue({
-      mutate: mockUpdateMutate,
-      isPending: true,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    const sliders = screen.getAllByRole('slider')
-    fireEvent.change(sliders[0], { target: { value: '0.5' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /saving/i })).toBeInTheDocument()
-    })
-  })
-
   it('calls resetPipeline.mutate when confirm reset clicked', async () => {
     vi.mocked(useSettings).mockReturnValue({
       data: mockSettingsData,
@@ -400,90 +262,4 @@ describe('Settings', () => {
     expect(mockResetPipelineMutate).toHaveBeenCalled()
   })
 
-  it('calls reEvaluate.mutate when confirm re-evaluate clicked', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    fireEvent.click(screen.getByRole('button', { name: /re-evaluate/i }))
-    
-    await waitFor(() => {
-      expect(screen.getByText('Re-evaluate All Matches?')).toBeInTheDocument()
-    })
-    
-    fireEvent.click(screen.getByRole('button', { name: /re-evaluate all/i }))
-    
-    expect(mockReEvaluateMutate).toHaveBeenCalled()
-  })
-
-  it('updates threshold slider and shows save button', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    // The threshold sliders are after the weight sliders
-    const sliders = screen.getAllByRole('slider')
-    // Weight sliders: 0-3, Threshold sliders: 4-7
-    const thresholdSlider = sliders[4]
-    
-    fireEvent.change(thresholdSlider, { target: { value: '0.8' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
-    })
-  })
-
-  it('clears localSettings via onSuccess callback after save completes', async () => {
-    vi.mocked(useSettings).mockReturnValue({
-      data: mockSettingsData,
-      isLoading: false,
-      error: null,
-    } as any)
-
-    // Mock mutate to capture and immediately call the onSuccess callback
-    const mockMutateWithCallback = vi.fn((data, options) => {
-      // Simulate successful save by calling onSuccess
-      if (options?.onSuccess) {
-        options.onSuccess()
-      }
-    })
-    vi.mocked(useUpdateSettings).mockReturnValue({
-      mutate: mockMutateWithCallback,
-      isPending: false,
-    } as any)
-
-    renderWithProviders(<Settings />)
-    
-    // Make a change to show Save button
-    const sliders = screen.getAllByRole('slider')
-    fireEvent.change(sliders[0], { target: { value: '0.5' } })
-    
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
-    })
-    
-    // Click Save
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
-    
-    // Verify mutate was called with the local settings and onSuccess callback
-    expect(mockMutateWithCallback).toHaveBeenCalledWith(
-      expect.objectContaining({ weights: expect.any(Object) }),
-      expect.objectContaining({ onSuccess: expect.any(Function) })
-    )
-    
-    // After onSuccess is called, localSettings should be cleared
-    // which means the Save/Cancel buttons should disappear
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
-    })
-    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
-  })
 })

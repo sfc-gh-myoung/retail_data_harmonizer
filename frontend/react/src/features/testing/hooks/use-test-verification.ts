@@ -97,21 +97,6 @@ export function useCancelTests() {
   })
 }
 
-export function useTestStatus(runId: string | null, enabled: boolean = true) {
-  return useQuery({
-    queryKey: ['testing', 'status', runId],
-    queryFn: () => fetchApi(`/v2/testing/status/${runId}`, testStatusResponseSchema),
-    enabled: enabled && runId !== null,
-    refetchInterval: (query) => {
-      // Poll every 3 seconds while running
-      if (query.state.data?.status === 'running') {
-        return 3000
-      }
-      return false
-    },
-  })
-}
-
 const ACTIVE_RUN_STORAGE_KEY = 'testing_active_run_id'
 const EXPECTED_METHODS_STORAGE_KEY = 'testing_expected_methods'
 const STARTED_AT_STORAGE_KEY = 'testing_started_at'

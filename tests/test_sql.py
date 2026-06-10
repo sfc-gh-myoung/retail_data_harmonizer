@@ -99,7 +99,6 @@ class TestColumnNameConsistency:
     # Files where staging column SEARCH_SCORE is valid
     STAGING_FILES = {
         "02_schema_and_tables.sql",  # DDL for CORTEX_SEARCH_STAGING table
-        "09c_matching_ensemble.sql",  # Reads from staging, writes to ITEM_MATCHES
         "12_parallel_matchers.sql",  # Batch processing uses staging
     }
 
@@ -117,7 +116,7 @@ class TestColumnNameConsistency:
     def test_item_matches_uses_raw_item_id(self) -> None:
         """ITEM_MATCHES should use RAW_ITEM_ID, not ITEM_ID as FK."""
         for sql_file in SQL_FILES:
-            if sql_file.name in ("01_setup.sql", "91_teardown.sql"):
+            if sql_file.name in ("01_teardown.sql",):
                 continue
             content = _strip_comments(_read_sql(sql_file))
             # Look for im.ITEM_ID or ITEM_MATCHES...ITEM_ID patterns
@@ -151,3 +150,62 @@ class TestConfigKeyCasing:
         for match in re.finditer(r"CONFIG.*?VALUES\s*\(\s*'([^']+)'", content, re.DOTALL):
             key = match.group(1)
             assert key == key.upper(), f"{sql_file.name}: config key '{key}' should be UPPER_CASE"
+
+
+# ---------------------------------------------------------------------------
+# Guard: removed dead objects must not reappear in sql/setup
+# ---------------------------------------------------------------------------
+
+REMOVED_IDENTIFIERS = [
+    # Serial classification job-queue (11d)
+    "MATCH_ITEMS_STREAM",
+    "RECOVER_ORPHANED_ITEMS",
+    "CLASSIFICATION_JOBS",
+    "START_CLASSIFICATION_JOB",
+    "UPDATE_CLASSIFICATION_PROGRESS",
+    "GET_CLASSIFICATION_JOB",
+    "PROCESS_CLASSIFICATION_JOB",
+    "POLL_AND_PROCESS_CLASSIFICATION_JOBS",
+    # Serial classification procs (11b)
+    "CLASSIFY_RAW_ITEMS",
+    "CLASSIFY_SUBCATEGORY",
+    # Superseded matchers (11b)
+    "MATCH_CORTEX_SEARCH",
+    "MATCH_COSINE_SIMILARITY",
+    "MATCH_LLM_SEMANTIC",
+    # Dead helpers (11b, 12)
+    "COUNT_SIGNAL_AGREEMENT",
+    "MERGE_STAGING_TO_MATCHES",
+    "GET_LATEST_BATCH_ID",
+    "JACCARD_SCORE_JS",
+    "GET_PENDING_CATEGORIES",
+    # Dead ensemble + notification (11c, 16)
+    "COMPUTE_ENSEMBLE_WITH_NOTIFICATION",
+    "SEND_REVIEW_NOTIFICATION",
+    # Dead task-status cache (16)
+    "GET_PIPELINE_TASK_STATUS",
+    "REFRESH_PIPELINE_TASK_STATUS",
+    "PIPELINE_TASK_STATUS_CACHE",
+    "V_PIPELINE_TASK_STATUS",
+]
+
+# Only scan sql/setup (not teardown, which intentionally contains DROP statements)
+SETUP_DIR = SQL_DIR / "setup"
+SETUP_SQL_FILES = sorted(SETUP_DIR.rglob("*.sql"))
+
+
+class TestRemovedIdentifiersGuard:
+    """Guard test: removed dead objects must not reappear in sql/setup."""
+
+    @pytest.mark.parametrize("identifier", REMOVED_IDENTIFIERS)
+    def test_identifier_absent_from_setup(self, identifier: str) -> None:
+        """Removed dead objects must not be recreated in sql/setup files."""
+        matches = []
+        for sql_file in SETUP_SQL_FILES:
+            content = _strip_comments(_read_sql(sql_file))
+            if re.search(rf"\b{re.escape(identifier)}\b", content, re.IGNORECASE):
+                matches.append(sql_file.name)
+        assert not matches, (
+            f"Removed identifier '{identifier}' reappeared in setup files: {matches}. "
+            "This object was intentionally deleted — do not recreate it."
+        )

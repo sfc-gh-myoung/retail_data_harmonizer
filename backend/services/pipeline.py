@@ -105,121 +105,6 @@ class PipelineService(BaseService):
         }
 
     # ------------------------------------------------------------------
-    # Dashboard: Optimization metrics
-    # ------------------------------------------------------------------
-
-    async def get_optimization_data(self) -> dict[str, Any]:
-        """Fetch pipeline optimization metrics from DT_OPTIMIZATION_METRICS.
-
-        Returns:
-            Dict with total_matches, cache_hits, rates, and early exit counts.
-        """
-        rows = await self.sf.query(f"SELECT * FROM {self.db_name}.ANALYTICS.DT_OPTIMIZATION_METRICS")
-        row = rows[0] if rows else {}
-
-        return {
-            "total_matches": int(row.get("TOTAL_MATCHES", 0) or 0),
-            "cache_hits": int(row.get("CACHE_HITS", 0) or 0),
-            "cache_hit_rate_pct": float(row.get("CACHE_HIT_RATE_PCT", 0) or 0),
-            "early_exit_4way": int(row.get("EARLY_EXIT_4WAY_COUNT", 0) or 0),
-            "early_exit_3way": int(row.get("EARLY_EXIT_3WAY_COUNT", 0) or 0),
-            "early_exit_2way": int(row.get("EARLY_EXIT_2WAY_COUNT", 0) or 0),
-        }
-
-    # ------------------------------------------------------------------
-    # Dashboard: Latency data
-    # ------------------------------------------------------------------
-
-    async def get_latency_data(self) -> dict[str, Any]:
-        """Fetch pipeline latency summary from V_PIPELINE_LATENCY_SUMMARY.
-
-        Note: This uses a view (not a Dynamic Table) because it depends on
-        V_TASK_EXECUTION_METRICS which uses TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
-        with non-constant arguments - incompatible with Dynamic Tables.
-
-        Returns:
-            Dict with runs list, avg_latency, target_met count, and total_runs.
-        """
-        rows = await self.sf.query(f"""
-            SELECT
-                RUN_MINUTE,
-                LATENCY_DISPLAY,
-                TOTAL_LATENCY_SECONDS,
-                CORTEX_SEARCH_SECONDS,
-                COSINE_SECONDS,
-                EDIT_SECONDS,
-                JACCARD_SECONDS,
-                PREP_SECONDS,
-                ENSEMBLE_SECONDS,
-                RUN_STATUS
-            FROM {self.db_name}.ANALYTICS.V_PIPELINE_LATENCY_SUMMARY
-            ORDER BY RUN_MINUTE DESC
-            LIMIT 10
-        """)
-
-        return {
-            "runs": rows,
-            "avg_latency": (sum(r.get("TOTAL_LATENCY_SECONDS", 0) or 0 for r in rows) / len(rows) if rows else 0),
-            "target_met": (sum(1 for r in rows if (r.get("TOTAL_LATENCY_SECONDS", 0) or 0) <= 300) if rows else 0),
-            "total_runs": len(rows),
-        }
-
-    # ------------------------------------------------------------------
-    # Monitoring: Pipeline errors
-    # ------------------------------------------------------------------
-
-    async def get_pipeline_errors(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Fetch recent pipeline errors from PIPELINE_ERRORS table.
-
-        Args:
-            limit: Maximum number of error rows to return.
-
-        Returns:
-            List of error dicts with ERROR_ID, PROCEDURE_NAME, etc.
-        """
-        return await self.sf.query(f"""
-            SELECT
-                ERROR_ID,
-                PROCEDURE_NAME,
-                ERROR_MESSAGE,
-                ERROR_CONTEXT,
-                TO_VARCHAR(CREATED_AT, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
-            FROM {self.db_name}.ANALYTICS.PIPELINE_ERRORS
-            ORDER BY CREATED_AT DESC
-            LIMIT {limit}
-        """)
-
-    # ------------------------------------------------------------------
-    # Monitoring: Pipeline progress
-    # ------------------------------------------------------------------
-
-    async def get_pipeline_progress(self, limit: int = 20) -> list[dict[str, Any]]:
-        """Fetch recent pipeline run progress from PIPELINE_RUN_PROGRESS.
-
-        Args:
-            limit: Maximum number of progress rows to return.
-
-        Returns:
-            List of progress dicts with RUN_ID, STATUS, counts, etc.
-        """
-        return await self.sf.query(f"""
-            SELECT
-                RUN_ID,
-                PROCEDURE_NAME,
-                BATCH_NUMBER,
-                ITEMS_PROCESSED,
-                ITEMS_MATCHED,
-                ITEMS_FAILED,
-                TO_VARCHAR(START_TIME, 'YYYY-MM-DD HH24:MI:SS') AS start_time,
-                TO_VARCHAR(END_TIME, 'YYYY-MM-DD HH24:MI:SS') AS end_time,
-                STATUS,
-                RESULT_MESSAGE
-            FROM {self.db_name}.ANALYTICS.PIPELINE_RUN_PROGRESS
-            ORDER BY START_TIME DESC
-            LIMIT {limit}
-        """)
-
-    # ------------------------------------------------------------------
     # Pipeline tab: Full data set
     # ------------------------------------------------------------------
 
@@ -386,20 +271,6 @@ class PipelineService(BaseService):
     # Task management
     # ------------------------------------------------------------------
 
-    async def get_task_status(self) -> list[dict[str, Any]]:
-        """Fetch current Snowflake Task states via SHOW TASKS.
-
-        Returns:
-            List of task row dicts from SHOW TASKS (both HARMONIZED and ANALYTICS schemas).
-        """
-        import asyncio
-
-        harmonized_tasks, analytics_tasks = await asyncio.gather(
-            self.sf.query(f"SHOW TASKS IN SCHEMA {self.db_name}.HARMONIZED"),
-            self.sf.query(f"SHOW TASKS IN SCHEMA {self.db_name}.ANALYTICS"),
-        )
-        return (harmonized_tasks or []) + (analytics_tasks or [])
-
     async def _fetch_all_tasks(self) -> list[dict[str, Any]]:
         """Fetch tasks from V_TASK_STATE_CACHE (deduplicated view over cached SHOW TASKS).
 
@@ -492,23 +363,6 @@ class PipelineService(BaseService):
             Status message from the execute call.
         """
         return await self.sf.execute(f"CALL {self.db_name}.HARMONIZED.RESET_PIPELINE()")
-
-    # ------------------------------------------------------------------
-    # Configuration
-    # ------------------------------------------------------------------
-
-    async def get_batch_size_config(self) -> int:
-        """Fetch DEFAULT_BATCH_SIZE from the CONFIG table.
-
-        Returns:
-            Batch size integer, defaults to 100 if not found.
-        """
-        rows = await self.sf.query(f"""
-            SELECT CONFIG_VALUE::INT AS val
-            FROM {self.db_name}.ANALYTICS.CONFIG
-            WHERE CONFIG_KEY = 'DEFAULT_BATCH_SIZE'
-        """)
-        return rows[0]["val"] if rows else 100
 
     # ------------------------------------------------------------------
     # Private helpers

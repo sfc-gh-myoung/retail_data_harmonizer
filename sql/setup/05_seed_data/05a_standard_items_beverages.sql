@@ -9,6 +9,10 @@ USE ROLE HARMONIZER_DEMO_ROLE;
 USE DATABASE HARMONIZER_DEMO;
 USE WAREHOUSE HARMONIZER_DEMO_WH;
 
+-- Reset for idempotent re-run (first STANDARD_ITEMS seed file — clears all categories)
+TRUNCATE TABLE IF EXISTS HARMONIZER_DEMO.RAW.STANDARD_ITEMS;
+SELECT '[PASS] STANDARD_ITEMS reset' AS progress;
+
 -- ============================================================================
 -- STANDARD_ITEMS: Master Item List - BEVERAGES (~213 items)
 -- ============================================================================
